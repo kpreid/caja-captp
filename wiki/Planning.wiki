@@ -1,0 +1,18 @@
+#summary Information gathering -- what tools/libraries to use?
+
+= Server-to-client communication =
+
+We need to be able to asynchronously pass messages from a web server to a web browser. This requires clever gimmicks.
+
+  * Polling is an option, obviously
+  * The general category of these techniques is called “[Comet]”.
+    * Look at [http://orbited.org/ Orbited]
+      * Ah, this is a general browser-to-TCP-connection proxy. What we want is more native, passing discrete messages in JSON format. Might be useful anyway -- interop with E CapTP?
+  * My notes contain "Michael Carter" and I forget why — presumably [http://cometdaily.com/people/michael_carter/ him].
+
+= Server-side JavaScript =
+
+We need a [http://wiki.erights.org/wiki/CapTP CapTP] implementation on the server. That means running either [E] on JavaScript on the server, or implementing CapTP in Yet Another Language. But using JavaScript has the clear advantage that we can test _this_ CapTP implementation, and it only needs to (at first) interoperate with itself. So, use a server-side JavaScript implementation.
+
+  * server-js group [MarkM] knows (investigate what it was this meant)
+  * Use Rhino as the JavaScript implementation, per a couple recommendations.
