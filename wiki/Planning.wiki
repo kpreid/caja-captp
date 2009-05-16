@@ -21,17 +21,19 @@ We need a [http://wiki.erights.org/wiki/CapTP CapTP] implementation on the serve
 
 For browser/server operation, we probably don't want to load crypto libraries on the client. That means that all our messages are plaintext-as-far-as-we-know delivered over HTTPS to the server, which does all the CapTP-related crypto (swiss number handling, VatIDs as public keys, etc)
 
-All of the 'in vat' communication runs on the browser, and the crypto for outside communication runs on the server. The browser and server form a single distributed machine, in a sense.
+All of the 'in vat' computation runs on the browser, and the crypto for outside communication runs on the server. The browser and server form a single distributed machine, in a sense.
+
+The design of CapTP implementation may need to be revised to allow for only-asynchronous access to crypto operations.
 
 = Addressing =
 
-Our objects have the same address components as in Pluribus: VatID, swiss number, network address hints. However, the wire protocol is different (HTTP-based). Therefore, it makes sense to use a different type of URL.
+Our objects have the same address components as in Pluribus: VatID, swiss number, network address hints. However, the wire protocol is different (HTTPS-based). Therefore, it makes sense to use a different type of URL.
 
 {{{
 captp://*vatID@locationhints/swissnum    # Pluribus
 
-http://*vatID@locationhint/arbitrarypath/swissnum       # Caja-CapTP perhaps
-http://*vatID@locationhint/arbitrarypath/#swissnum      # Or this
+https://*vatID@locationhint/arbitrarypath/swissnum       # Caja-CapTP perhaps
+https://*vatID@locationhint/arbitrarypath/#swissnum      # Or this
 }}}
 
   * To review: does it make sense to put the VatID in the userid field?
