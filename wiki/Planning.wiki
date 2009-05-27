@@ -40,3 +40,7 @@ https://*vatID@locationhint/arbitrarypath/#swissnum      # Or this
   * To review: Why does CapTP use an asterisk before the VatID?
 
 The reason for possibly putting the swiss number in the fragment is this: In CapTP, there is at most one _CapTP connection_ per pair of vats. The process of contacting an object is to open a connection, or reuse an existing one, to its vat, then lookup its swiss number over the connection. This process is analogous to "download a document and then lookup the fragment identifier in it".
+
+= Serialization =
+
+This will be our serialization format: http://wiki.erights.org/wiki/Data-E_in_JSON
