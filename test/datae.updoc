@@ -1,0 +1,59 @@
+# Copyright 2009 Kevin Reid, under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+This file tests the Caja-CapTP implementation of Data-E serialization, which includes deAsJSONKit, deSubgraphKit, and makeSurgeon.
+
+-------------------------------------------------------------------------------
+The following code is boilerplate to load a Cajita module with collecting the return value. This code should be folded into some Cajita or EoJS library.
+
+  ? def jsTools := <import:org.erights.eojs.jsTools>; null
+
+  ? def exports; null
+  
+  ? def oldNewModuleHandler := cajitaPriv.getNewModuleHandler()
+  > cajitaPriv.setNewModuleHandler(jsTools.asObject([
+  >   "handle" => jsTools.asFunction(fn newModule {
+  >     bind exports := newModule.instantiate(cajitaPriv.get___(), oldNewModuleHandler.getImports())
+  >   })
+  > ]))
+  
+  ? EoJS.asyncLoad("../src/datae.out.js")
+  
+  ? interp.waitAtTop(exports)
+
+-------------------------------------------------------------------------------
+
+  ? def deJSONTreeKit := exports["deJSONTreeKit"]
+  # value: deJSONTreeKit
+  
+  ? def deSubgraphKit := exports["deSubgraphKit"]
+  # value: deSubgraphKit
+  
+-------------------------------------------------------------------------------
+
+Testing the builder of deJSONTreeKit.
+
+  ? def b := deJSONTreeKit.makeBuilder()
+  # value: <deJSONTreeKit builder>
+
+Literals.
+  
+  ? def b := deJSONTreeKit.makeBuilder()
+  > b.buildRoot(b.buildLiteral("abcd"))
+  # value: ["string", "abcd"]
+  
+  ? def b := deJSONTreeKit.makeBuilder()
+  > b.buildRoot(b.buildLiteral(11234))
+  # value: ["float64", 11234]
+
+XXX review (format/interop): Do we want to support ints distinctly?
+  
+  ? def b := deJSONTreeKit.makeBuilder()
+  > b.buildRoot(b.buildLiteral(11234.5))
+  # value: ["float64", 11234.5]
+  
+  No tests for characters since they are irrelevant to the JavaScript applicability right now. XXX review (format/interop): mismatch between JS and Data-E literal types -- interop vs. nativeness.
+
+XXX review (format/interop): What to do about negative numbers? In Data-E they are represented as negation operations, but JS has no negate method. For now we permit them in literals.
+
+
