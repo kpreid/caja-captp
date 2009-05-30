@@ -36,11 +36,11 @@ Testing the builder of deJSONTreeKit.
   ? def b := deJSONTreeKit.makeBuilder()
   # value: <deJSONTreeKit builder>
 
-Literals.
+--- Literals.
   
   ? def b := deJSONTreeKit.makeBuilder()
   > b.buildRoot(b.buildLiteral("abcd"))
-  # value: ["string", "abcd"]
+  # value: "abcd"
   
   ? def b := deJSONTreeKit.makeBuilder()
   > b.buildRoot(b.buildLiteral(11234))
@@ -56,4 +56,51 @@ XXX review (format/interop): Do we want to support ints distinctly?
 
 XXX review (format/interop): What to do about negative numbers? In Data-E they are represented as negation operations, but JS has no negate method. For now we permit them in literals.
 
+--- Import.
+
+  ? def b := deJSONTreeKit.makeBuilder()
+  > b.buildRoot(b.buildImport("aardvark"))
+  # value: ["import", "aardvark"]
+  
+--- Ibid
+
+XXX can't test this here yet
+  x ? def b := deJSONTreeKit.makeBuilder()
+  x > b.buildRoot(b.buildIbid())
+
+--- Call.
+
+  ? def b := deJSONTreeKit.makeBuilder()
+  > b.buildRoot(b.buildCall(b.buildImport("a"), "b", [b.buildImport("c"), b.buildImport("d")]))
+  # value: ["call", ["import", "a"], "b", [["import", "c"], ["import", "d"]]]
+
+--- Define and ibid.
+
+  ? def b := deJSONTreeKit.makeBuilder()
+  > b.buildRoot(b.buildCall(def [t,id] := b.buildDefine(b.buildLiteral("Lorem")); t,
+  >                         "add",
+  >                         [b.buildIbid(id)]))
+  # value: ["call", ["define", 0, "Lorem"], "add", [["ibid", 0]]]
+
+Test that define increments a counter.
+
+  ? def b := deJSONTreeKit.makeBuilder()
+  > b.buildRoot(b.buildCall(def [t1,_] := b.buildDefine(b.buildLiteral("Lorem")); t1,
+  >                         "add",
+  >                         [def [t2,id] := b.buildDefine(b.buildLiteral("ipsum")); t2,
+  >                          def [t3,_] := b.buildDefine(b.buildLiteral("dolor")); t3,
+  >                          b.buildIbid(id)]))
+  # value: ["call", ["define", 0, "Lorem"], "add", [["define", 1, "ipsum"], ["define", 2, "dolor"], ["ibid", 1]]]
+
+--- Defrec.
+
+Trivial circular structure: one call whose arg is itself
+
+  ? def b := deJSONTreeKit.makeBuilder()
+  > b.buildRoot(def prom := b.buildPromise()
+  >             b.buildDefrec(prom+1,
+  >                           b.buildCall(b.buildImport("makeFoo"),
+  >                                       "run",
+  >                                       [b.buildIbid(prom)])))
+  # value: ["defrec", 0, ["call", ["import", "makeFoo"], "run", [["ibid", 0]]]]
 
