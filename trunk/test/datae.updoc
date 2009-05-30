@@ -62,12 +62,6 @@ XXX review (format/interop): What to do about negative numbers? In Data-E they a
   > b.buildRoot(b.buildImport("aardvark"))
   # value: ["import", "aardvark"]
   
---- Ibid
-
-XXX can't test this here yet
-  x ? def b := deJSONTreeKit.makeBuilder()
-  x > b.buildRoot(b.buildIbid())
-
 --- Call.
 
   ? def b := deJSONTreeKit.makeBuilder()
@@ -103,4 +97,59 @@ Trivial circular structure: one call whose arg is itself
   >                                       "run",
   >                                       [b.buildIbid(prom)])))
   # value: ["defrec", 0, ["call", ["import", "makeFoo"], "run", [["ibid", 0]]]]
+
+-------------------------------------------------------------------------------
+
+Testing the builder of deSubgraphKit.
+
+  ? def env := jsTools.asObject([
+  >   "x" => "aardvarks",
+  >   "makeArray" => jsTools.asFunction(__makeList),
+  > ]); null
+
+  ? def b := deSubgraphKit.makeBuilder(env)
+  # value: <deSubgraphKit builder>
+
+--- Literals
+
+  ? def b := deSubgraphKit.makeBuilder(env)
+  > b.buildRoot(b.buildLiteral(43))
+  # value: 43
+  
+  ? def b := deSubgraphKit.makeBuilder(env)
+  > b.buildRoot(b.buildLiteral("Lorem"))
+  # value: "Lorem"
+
+XXX if we introduce a big-integer type test it here
+
+--- Import
+
+  ? def b := deSubgraphKit.makeBuilder(env)
+  > b.buildRoot(b.buildImport("x"))
+  # value: "aardvarks"
+
+  ? def b := deSubgraphKit.makeBuilder(env)
+  > b.buildRoot(b.buildImport("yz"))
+  # problem: Error: deSubgraphKit: Import not found: yz
+
+--- Call
+
+  ? def b := deSubgraphKit.makeBuilder(env)
+  > b.buildRoot(b.buildCall(b.buildImport("makeArray"), "call", ["bogus", b.buildImport("x"), b.buildLiteral("aardwolf")]))
+  # value: ["aardvarks", "aardwolf"]
+
+--- Define
+
+  ? def b := deSubgraphKit.makeBuilder(env)
+  > b.buildRoot(b.buildCall(b.buildImport("makeArray"), "call",
+  >                         [null,
+  >                          def [t1,_] := b.buildDefine(b.buildLiteral("Lorem")); t1,
+  >                          def [t2,id] := b.buildDefine(b.buildLiteral("ipsum")); t2,
+  >                          def [t3,_] := b.buildDefine(b.buildLiteral("dolor")); t3,
+  >                          b.buildIbid(id)]))
+  # value: ["Lorem", "ipsum", "dolor", "ipsum"]
+
+--- Defrec
+
+Defrec is not supported yet because we haven't decided what to do about circular structure yet.
 
