@@ -64,13 +64,36 @@ var deJSONTreeKit = (function () {
 var deSubgraphKit = (function () {
   return {
     toString: function () { return "deSubgraphKit"; },
-    makeBuilder: function () { 
+    makeBuilder: function (env) { 
+      var temps = [];
+      var nextTemp = 0;
       return {
         toString: function () { return "<deSubgraphKit builder>"; },
         
         buildRoot: function (node) {
           return node;
         },
+        
+        buildLiteral: function (value) { return value; },
+        
+        buildImport: function (noun) { 
+          if (noun in env) {
+            return env[noun];
+          } else {
+            throw new Error("deSubgraphKit: Import not found: " + noun); // XXX appropriate exception generation?
+          }
+        },
+
+        buildCall: function (rec, verb, args) { return rec[verb].apply(rec, args); },
+        
+        buildDefine: function (definition) {
+          temps[nextTemp] = definition;
+          return [definition, nextTemp++];
+        },
+        
+        buildIbid: function (tempIndex) {
+          return temps[tempIndex];
+        }
         
       }; // end builder
     }
