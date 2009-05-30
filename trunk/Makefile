@@ -1,7 +1,6 @@
 .PHONY: all clean test
 
 RUNE = rune -cpa eojs/lib-host -cpa eojs/tagsoup.jar
-BROWSER = open
 
 # -----------------------------------------------------------------------------
 
@@ -11,7 +10,7 @@ clean:
 	rm -f src/*.out.js test/*.live.xhtml
 
 test: all
-	$(BROWSER) test/*.live.xhtml
+	for f in test/*.live.xhtml; do python -m webbrowser "file://`pwd`/$$f"; done
 
 # -----------------------------------------------------------------------------
 
