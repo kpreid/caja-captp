@@ -1,0 +1,9 @@
+#summary Rules, formatting and otherwise, for project code.
+
+= Formatting =
+
+  * Two-space indents.
+  * Do not omit semicolons in !JavaScript. Do omit semicolons in E.
+  * Blank lines inside indented blocks shall be equally indented.
+  * Do not hard-wrap paragraphs. 
+  * Do not stick to 80 columns unless it looks good that way.
