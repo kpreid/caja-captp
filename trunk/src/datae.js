@@ -20,6 +20,8 @@ var deJSONTreeKit = (function () {
           } else if (t === "number") {
             // XXX review whether we would like to support explicit ints
             return cajita.freeze(["float64", literal]);
+          } else {
+            throw new Error("deJSONTreeKit: This is not a literal: " + literal);
           }
         },
 
@@ -63,7 +65,9 @@ var deJSONTreeKit = (function () {
 
 var deSubgraphKit = (function () {
   return {
+
     toString: function () { return "deSubgraphKit"; },
+
     makeBuilder: function (env) { 
       var temps = [];
       var nextTemp = 0;
@@ -96,7 +100,56 @@ var deSubgraphKit = (function () {
         }
         
       }; // end builder
-    }
+    },
+    
+    makeRecognizer: function (uncallers, unenv) {
+      return {
+        toString: function () { return "<deSubgraphKit recognizer>"; },
+        
+        recognize: function (specimen, builder) {
+          cajita.enforceType(builder, "object", "deSubgraphKit.recognize's builder");
+          
+          // subRecog is the recursive processor of a single object being serialized.
+          var subRecog = function (obj) {
+            // There are four possible results from serializing an object, indicated below
+            
+            var unenvLookup = unenv.get(obj);
+            if (unenvLookup !== undefined) {
+              // 1. The object is an exit.
+              
+              // XXX using undefined here because that's what a cajita.newTable() returns for misses -- should we do otherwise, eg using null? -- kpreid 2009-05-31
+              //cajita.enforceType(unenvLookup, "string") // not yet tested
+              return builder.buildImport(unenvLookup);
+            } else if (typeof(obj) == "string" || typeof(obj) == "number") {
+              // 2. The object is a literal.
+              return builder.buildLiteral(obj);
+            } else {
+              // XXX implement
+              // 3. The object is composite (gets uncalled).
+              for (var i = 0; i < uncallers.length; i++) {
+                // An uncaller returns either a 3-tuple or null.
+                var optPortrayal = uncallers[i].optUncall(obj);
+                if (optPortrayal !== null) {
+                  var recipBuilt = subRecog(optPortrayal[0]);
+                  var argsObjs = optPortrayal[2];
+                  var argsBuilt = [];
+                  for (var j = 0; j < argsObjs.length; j++) {
+                    argsBuilt[j] = subRecog(argsObjs[j]);
+                  }
+                  return builder.buildCall(recipBuilt, optPortrayal[1], cajita.freeze(argsBuilt));
+                }
+              }
+
+              // 4. The object is not serializable.
+              throw new Error("deSubgraphKit: can't uneval: " + obj);
+            }
+          }; // end subRecog
+          
+          return builder.buildRoot(subRecog(specimen));
+        },
+      }; // end recognizer
+    },
+    
   }; // end deSubgraphKit
 })();
 
