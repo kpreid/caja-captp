@@ -6,13 +6,15 @@ This file tests the Caja-CapTP implementation of Data-E serialization, which inc
 -------------------------------------------------------------------------------
 The following code is boilerplate to load a Cajita module with collecting the return value. This code should be folded into some Cajita or EoJS library.
 
-  ? def jsTools := <import:org.erights.eojs.jsTools>; null
+  ? def js := <import:org.erights.eojs.jsTools>; null
+
+  ? def cajita := <import:org.erights.eojs.cajita>; null
 
   ? def exports; null
   
   ? def oldNewModuleHandler := cajitaPriv.getNewModuleHandler()
-  > cajitaPriv.setNewModuleHandler(jsTools.asObject([
-  >   "handle" => jsTools.asFunction(fn newModule {
+  > cajitaPriv.setNewModuleHandler(js.asObject([
+  >   "handle" => js.asFunction(fn newModule {
   >     bind exports := newModule.instantiate(cajitaPriv.get___(), oldNewModuleHandler.getImports())
   >   })
   > ]))
@@ -55,6 +57,13 @@ XXX review (format/interop): Do we want to support ints distinctly?
   No tests for characters since they are irrelevant to the JavaScript applicability right now. XXX review (format/interop): mismatch between JS and Data-E literal types -- interop vs. nativeness.
 
 XXX review (format/interop): What to do about negative numbers? In Data-E they are represented as negation operations, but JS has no negate method. For now we permit them in literals.
+
+Bogus literal:
+
+  ? def b := deJSONTreeKit.makeBuilder()
+  > b.buildRoot(b.buildLiteral(js.asObject([].asMap())))
+  # problem: Error: deJSONTreeKit: This is not a literal: [object Object]
+
 
 --- Import.
 
@@ -102,9 +111,9 @@ Trivial circular structure: one call whose arg is itself
 
 Testing the builder of deSubgraphKit.
 
-  ? def env := jsTools.asObject([
+  ? def env := js.asObject([
   >   "x" => "aardvarks",
-  >   "makeArray" => jsTools.asFunction(__makeList),
+  >   "makeArray" => js.asFunction(__makeList),
   > ]); null
 
   ? def b := deSubgraphKit.makeBuilder(env)
@@ -134,6 +143,8 @@ XXX if we introduce a big-integer type test it here
 
 --- Call
 
+The argument nodes are arbitrary, just to show that they are passed through.
+
   ? def b := deSubgraphKit.makeBuilder(env)
   > b.buildRoot(b.buildCall(b.buildImport("makeArray"), "call", ["bogus", b.buildImport("x"), b.buildLiteral("aardwolf")]))
   # value: ["aardvarks", "aardwolf"]
@@ -153,3 +164,59 @@ XXX if we introduce a big-integer type test it here
 
 Defrec is not supported yet because we haven't decided what to do about circular structure yet.
 
+-------------------------------------------------------------------------------
+
+Given that the builders for each kit have been tested independently, we now test the recognizers by connecting them to the builders. First, some test infrastructure...
+
+  ? def uncallExample {}  # this needs to be not-a-literal
+  > 
+  > def failingUncaller := js.asObject([
+  >   "optUncall" => js.asFunction(def _(obj) {
+  >     return js.null()
+  >   }),
+  > ])
+  > def testUncaller := js.asObject([
+  >   "optUncall" => js.asFunction(def _(obj) {
+  >     if (obj == uncallExample) {
+  >       return [1, "run", ["aardvarks", 32.5]]
+  >     } else if (obj == "aardvarks") {
+  >       return ["FAIL", "run", ["shouldn't get my hands on an exit"]]
+  >     } else {
+  >       return js.null()
+  >     }
+  >   }),
+  > ])
+  > 
+  > def testUnenv := cajita.newTable(false)
+  > testUnenv.set("aardvarks", "x")
+  > null
+
+deSubgraphKit recognizer
+
+  ? def r := deSubgraphKit.makeRecognizer([failingUncaller, testUncaller], testUnenv)
+  # value: <deSubgraphKit recognizer>
+
+There are four cases when an object is serialized; they are considered in this order.
+
+1. It is a graph exit: builder.buildImport is used.
+
+  ? r.recognize("aardvarks", deJSONTreeKit.makeBuilder())
+  # value: ["import", "x"]
+
+2. It is a literal: builder.buildLiteral is used.
+
+  ? r.recognize(1, deJSONTreeKit.makeBuilder())
+  # value: ["float64", 1]
+
+  ? r.recognize("foo", deJSONTreeKit.makeBuilder())
+  # value: "foo"
+
+3. It is a composite object; each uncaller is applied to it in order, and the first success is passed to builder.buildCall. (The recipient and arguments here are chosen to exercise that they are in fact recursively processed.)
+
+  ? r.recognize(uncallExample, deJSONTreeKit.makeBuilder())
+  # value: ["call", ["float64", 1], "run", [["import", "x"], ["float64", 32.5]]]
+
+4. It is not serializable; an error is produced.
+
+  ? r.recognize(def randomObj {}, deJSONTreeKit.makeBuilder())
+  # problem: Error: deSubgraphKit: can't uneval: <E object randomObj>
