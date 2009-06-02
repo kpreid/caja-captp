@@ -1,3 +1,5 @@
+// Copyright 2009 Kevin Reid, under the terms of the MIT X license
+// found at http://www.opensource.org/licenses/mit-license.html ...............
 
 // This performs the same algorithm as deASTKit from E-on-Java, with only difference in the output.
 var deJSONTreeKit = (function () {
@@ -59,7 +61,59 @@ var deJSONTreeKit = (function () {
         },
         
       }; // end builder
-    }
+    },
+
+    // Accept a JSON structure and drive the builder to build corresponding structure.
+    recognize: function (specimen, builder) {
+      
+      // Maps the temp indexes in the input to the temp indexes used by the builder.
+      var tempMap = {};
+      
+      var handlers = {
+        recog_float64: function (tag, lit) { 
+          cajita.enforceType(lit, "number");
+          return builder.buildLiteral(lit);
+        },
+        recog_import: function (tag, name) { 
+          return builder.buildImport(name);
+        },
+        recog_call: function (tag, rec, verb, argsIn) {
+          var argsBuilt = [];
+          for (var i = 0; i < argsIn.length; i++) {
+            argsBuilt[i] = subRecog(argsIn[i]);
+          }
+          argsBuilt = cajita.freeze(argsBuilt);
+          // XXX this operates in the wrong order - prove it
+          var recBuilt = subRecog(rec);
+          //return cajita.freeze([recBuilt, verb, argsBuilt]);
+          return builder.buildCall(recBuilt, verb, argsBuilt);
+        },
+        recog_define: function (tag, inputTempIndex, rValue) {
+          var tuple = builder.buildDefine(subRecog(rValue));
+          var result = tuple[0];
+          var builtTempIndex = tuple[1];
+          tempMap[inputTempIndex] = builtTempIndex;
+          return result;
+        },
+        recog_ibid: function (tag, inputTempIndex) {
+          return builder.buildIbid(tempMap[inputTempIndex]);
+        },
+      };
+      
+      var subRecog = function (jsonValue) {
+        if (typeof(jsonValue) == "string") {
+          return builder.buildLiteral(jsonValue);
+        } else if (typeof(jsonValue) == "object") {
+          // assuming it's an array
+          return handlers["recog_" + jsonValue[0]].apply(cajita.USELESS, jsonValue);
+        } else {
+          // XXX test for handling this case
+        }
+      };
+      
+      return builder.buildRoot(subRecog(specimen));
+    },
+
   }; // end deJSONTreeKit
 })();
 

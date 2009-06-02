@@ -1,7 +1,7 @@
 # Copyright 2009 Kevin Reid, under the terms of the MIT X license
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
-This file tests the Caja-CapTP implementation of Data-E serialization, which includes deAsJSONKit, deSubgraphKit, and makeSurgeon.
+This file tests the Caja-CapTP implementation of Data-E serialization, which includes deJSONTreeKit, deSubgraphKit, and makeSurgeon.
 
 -------------------------------------------------------------------------------
 The following code is boilerplate to load a Cajita module with collecting the return value. This code should be folded into some Cajita or EoJS library.
@@ -34,6 +34,8 @@ The following code is boilerplate to load a Cajita module with collecting the re
 -------------------------------------------------------------------------------
 
 Testing the builder of deJSONTreeKit.
+
+XXX to review: Should we wrap our values in a {} so that they match the JSON 'object' rather than 'value' production?
 
   ? def b := deJSONTreeKit.makeBuilder()
   # value: <deJSONTreeKit builder>
@@ -166,7 +168,9 @@ Defrec is not supported yet because we haven't decided what to do about circular
 
 -------------------------------------------------------------------------------
 
-Given that the builders for each kit have been tested independently, we now test the recognizers by connecting them to the builders. First, some test infrastructure...
+Given that the builders for each kit have been tested independently, we now test the recognizers by connecting them to the builders. 
+
+deSubgraphKit recognizer. First, some test infrastructure...
 
   ? def uncallExample {}  # this needs to be not-a-literal
   > 
@@ -191,7 +195,7 @@ Given that the builders for each kit have been tested independently, we now test
   > testUnenv.set("aardvarks", "x")
   > null
 
-deSubgraphKit recognizer
+Construct a recognizer.
 
   ? def r := deSubgraphKit.makeRecognizer([failingUncaller, testUncaller], testUnenv)
   # value: <deSubgraphKit recognizer>
@@ -220,3 +224,80 @@ There are four cases when an object is serialized; they are considered in this o
 
   ? r.recognize(def randomObj {}, deJSONTreeKit.makeBuilder())
   # problem: Error: deSubgraphKit: can't uneval: <E object randomObj>
+
+-------------------------------------------------------------------------------
+
+XXX Implement structure sharing/circularity handling in deSubgraphKit recognizer
+XXX Review the E deSubgraphKit and deASTKit for cases that we don't handle
+
+-------------------------------------------------------------------------------
+
+deJSONTreeKit recognizer.
+
+We will use deSubgraphKit builders to test the output, as well as deJSONTreeKit builders in cases where the results would be ambiguous or it is useful as a simpler test.
+
+  ? def mb() {
+  >   return deSubgraphKit.makeBuilder(js.asObject([
+  >     "x" => "aardvarks",
+  >     "callable" => def callable := js.asFunction(fn a,b { a + b }),
+  >   ]))
+  > }; null
+
+The recognizer object is deJSONTreeKit itself, because no parameters are needed. 
+
+--- Literals.
+
+Float literal.
+
+  ? deJSONTreeKit.recognize(["float64", 2.213119], mb())
+  # value: 2.213119
+
+Checking the builder wasn't forgotten:
+
+  ? deJSONTreeKit.recognize(["float64", 2.213119], deJSONTreeKit.makeBuilder())
+  # value: ["float64", 2.213119]
+
+String literal.
+
+  ? deJSONTreeKit.recognize("x", mb())
+  # value: "x"
+  
+XXX test the builder was actually invoked here.
+  
+--- Import.
+
+  ? deJSONTreeKit.recognize(["import", "x"], mb())
+  # value: "aardvarks"
+
+--- Call.
+
+Getting complicated: we'll test roundtrip as well
+
+  ? deJSONTreeKit.recognize(["call", ["import", "callable"], "call", ["junk", "Hello ", "world"]], deJSONTreeKit.makeBuilder())
+  # value: ["call", ["import", "callable"], "call", ["junk", "Hello ", "world"]]
+
+  Checking that our function works independently...
+  ? mb().buildImport("callable")("fo", "o")
+  # value: "foo"
+
+  ? deJSONTreeKit.recognize(["call", ["import", "callable"], "call", ["junk", "Hello ", "world"]], mb())
+  # value: "Hello world"
+  
+--- Define and ibid.
+
+  ? deJSONTreeKit.recognize(["call", ["import", "callable"], "call", [["define", 0, ["float64", 99]], ["ibid", 0], ["ibid", 0]]], deJSONTreeKit.makeBuilder())
+  # value: ["call", ["import", "callable"], "call", [["define", 0, ["float64", 99]], ["ibid", 0], ["ibid", 0]]]
+  
+  ? deJSONTreeKit.recognize(["call", ["import", "callable"], "call", [["define", 0, ["float64", 99]], ["ibid", 0], ["ibid", 0]]], mb())
+  # value: 198
+
+A recognizer must not assume that the input's temporary indexes are the same as the output's. This constitutes a test:
+
+  ? deJSONTreeKit.recognize(["call", ["import", "callable"], "call", [["define", 7, ["float64", 99]], ["ibid", 7], ["ibid", 7]]], mb())
+  # value: 198
+
+XXX Review the Safe Serialization paper about what the constraints on temporary indexes are.
+
+--- Defrec.
+
+XXX Defrec is not yet supported because deSubgraphKit doesn't build defrecs.
