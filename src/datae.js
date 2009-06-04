@@ -3,11 +3,11 @@
 
 // This performs the same algorithm as deASTKit from E-on-Java, with only difference in the output.
 var deJSONTreeKit = (function () {
-  return {
+  return cajita.freeze({
     toString: function () { return "deJSONTreeKit"; },
     makeBuilder: function () {
       var nextTemp = 0;
-      return {
+      return cajita.freeze({
         toString: function () { return "<deJSONTreeKit builder>"; },
         
         buildRoot: function (node) {
@@ -60,7 +60,7 @@ var deJSONTreeKit = (function () {
           return defExpr;
         },
         
-      }; // end builder
+      }); // end builder
     },
 
     // Accept a JSON structure and drive the builder to build corresponding structure.
@@ -114,11 +114,11 @@ var deJSONTreeKit = (function () {
       return builder.buildRoot(subRecog(specimen));
     },
 
-  }; // end deJSONTreeKit
+  }); // end deJSONTreeKit
 })();
 
 var deSubgraphKit = (function () {
-  return {
+  return cajita.freeze({
 
     toString: function () { return "deSubgraphKit"; },
 
@@ -157,7 +157,7 @@ var deSubgraphKit = (function () {
     },
     
     makeRecognizer: function (uncallers, unenv) {
-      return {
+      return cajita.freeze({
         toString: function () { return "<deSubgraphKit recognizer>"; },
         
         recognize: function (specimen, builder) {
@@ -201,10 +201,10 @@ var deSubgraphKit = (function () {
           
           return builder.buildRoot(subRecog(specimen));
         },
-      }; // end recognizer
+      }); // end recognizer
     },
     
-  }; // end deSubgraphKit
+  }); // end deSubgraphKit
 })();
 
 

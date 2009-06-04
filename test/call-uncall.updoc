@@ -1,0 +1,107 @@
+# Copyright 2009 Kevin Reid, under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+The bulk of Data-E serialization works on the principle of /uncalling/: an object is represented as a method call which will reconstruct it. To uncall an object is to derive that representation, a /portrayal/, from it. An /uncaller/ is an object which, given an arbitrary object, may return a portrayal for it.
+
+A portrayal is a tuple (Array) [/recipient/, /verb/, /arguments array/]. That is, to reverse it, in JavaScript:
+  portrayal[0][portrayal[1]].apply(portrayal[0], portrayal[2])
+
+This file concerns itself with testing, not the infrastructure for using uncallers, but rather the provided uncallers and environments.
+
+Many JavaScript objects need to be constructed using the 'new' operator rather than a regular function call. This may be done by a call of 'cajita.construct(constructor, args)'.
+
+Cajita's sharedImports object is the typical default environment.
+
+-------------------------------------------------------------------------------
+
+  ? def cajita := <import:org.erights.eojs.cajita>
+  > def cajitaEnv := <import:org.erights.eojs.cajitaEnv>
+  > null
+
+Hide the particular printing of some objects which will show up in our test output.
+
+  ? interp.setPrintFunc(interp.getPrintFunc().withExit(cajita, "cajita").withExit(cajitaEnv["Error"], "Error"))
+
+-------------------------------------------------------------------------------
+The following code is boilerplate to load a Cajita module with collecting the return value. This code should be folded into some Cajita or EoJS library.
+
+  ? def js := <import:org.erights.eojs.jsTools>; null
+
+  ? def exports; null
+  
+  ? def oldNewModuleHandler := cajitaPriv.getNewModuleHandler()
+  > cajitaPriv.setNewModuleHandler(js.asObject([
+  >   "handle" => js.asFunction(fn newModule {
+  >     bind exports := newModule.instantiate(cajitaPriv.get___(), oldNewModuleHandler.getImports())
+  >   })
+  > ]))
+  
+  ? EoJS.asyncLoad("../src/uncallers.out.js")
+  
+  ? interp.waitAtTop(exports)
+
+-------------------------------------------------------------------------------
+
+  ? def builtinsUncaller := exports["builtinsUncaller"]
+  # value: builtinsUncaller
+
+  ? def builtinsMaker := exports["builtinsMaker"]
+  # value: builtinsMaker
+
+The builtinsUncaller handles all specific (not Object) objects defined by JavaScript standards / de facto standards which are not exits (such as null, undefined, and booleans) or atoms (such as numbers and strings) and not mutable (such as RegExp). Specifically, it currently handles Array, Error, and the subtypes [XXX terminology: 'subtype' reasonable/correct] of Error.
+
+The builtinsMaker provides operations which are the most convenient to construct the above objects as described in a single call, as well as operations on Object.
+
+If objects of these types have additional properties added by user code, they will be disregarded.
+
+--- Arrays.
+
+If an Array is not Cajita-frozen (i.e. is mutable), then it is not considered a pass-by-construction object and therefore not uncalled. Therefore, the portrayal must invoke a method which produces a frozen array; we provide this since there is no standard such operation.
+
+  ? builtinsUncaller.optUncall([1, [2], 3])
+  # value: [builtinsMaker, "frozenArray", [1, [2], 3]]
+
+  ? builtinsMaker.frozenArray(1, [2], 3)
+  # value: [1, [2], 3]
+  (Note that EoJS would print a non-frozen array differently.)
+  
+--- Errors.
+
+  ? def anError := cajita.construct(cajitaEnv["Error"], ["The sky is falling!"])
+  # value: Error: The sky is falling!
+  
+  ? builtinsUncaller.optUncall(anError)
+  # value: [cajita, "construct", [Error, ["The sky is falling!"]]]
+
+XXX implement uncalling of subtypes of Error.
+
+--- Other stuff.
+
+For anything else, the builtinsUncaller returns JavaScript null.
+
+  ? builtinsUncaller.optUncall(js)
+  # value: <JS null>
+  XXX should have a more generic error
+  
+  ? builtinsUncaller.optUncall(false)
+  # value: <JS null>
+
+-------------------------------------------------------------------------------
+
+  ? def recordUncaller := exports["recordUncaller"]
+  # value: recordUncaller
+
+The recordUncaller serializes objects which Cajita considers records (roughly, those whose constructor is Object) as the listing of their properties. It uses the builtinsMaker in its portrayals. It is separated from the builtinsUncaller so that applications may choose not to use the is-a-record criterion for serializing.
+
+  ? def foo := js.asObject(["x" => "y", "y" => "z"])
+  # value: <{x,y}>
+  
+  ? recordUncaller.optUncall(foo)
+  # value: [builtinsMaker, "record", ["x", "y", "y", "z"]]
+  
+  ? def foo2 := builtinsMaker.record("x", "y", "y", "z")
+  # value: <{x,y}>
+  
+  ? [foo2["x"], foo2["y"]]
+  # value: ["y", "z"]
+

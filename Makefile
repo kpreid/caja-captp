@@ -1,13 +1,17 @@
-.PHONY: all clean test
+.PHONY: all clean lib tests test
 
 RUNE = rune -cpa eojs/lib-host -cpa eojs/tagsoup.jar
 
 # -----------------------------------------------------------------------------
 
-all: src/datae.out.js test/datae.live.xhtml
+all: lib tests
 
 clean:
 	rm -f src/*.out.js test/*.live.xhtml
+
+lib: src/datae.out.js src/uncallers.out.js
+
+tests: test/datae.live.xhtml test/call-uncall.live.xhtml
 
 test: all
 	for f in test/*.live.xhtml; do python -m webbrowser "file://`pwd`/$$f"; done
