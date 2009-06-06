@@ -9,9 +9,9 @@ all: lib tests
 clean:
 	rm -f src/*.out.js test/*.live.xhtml
 
-lib: src/datae.out.js src/uncallers.out.js
+lib: src/captp.out.js src/datae.out.js src/uncallers.out.js
 
-tests: test/datae.live.xhtml test/call-uncall.live.xhtml
+tests: test/call-uncall.live.xhtml test/captp-objects.live.xhtml test/datae.live.xhtml
 
 test: all
 	for f in test/*.live.xhtml; do python -m webbrowser "file://`pwd`/$$f"; done
