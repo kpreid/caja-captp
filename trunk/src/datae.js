@@ -122,6 +122,7 @@ var deSubgraphKit = (function () {
 
     toString: function () { return "deSubgraphKit"; },
 
+    // XXX review: Given magic property names, it safe to use JS properties with no prefix/suffix as the env?
     makeBuilder: function (env) { 
       var temps = [];
       var nextTemp = 0;

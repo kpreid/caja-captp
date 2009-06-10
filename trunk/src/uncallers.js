@@ -57,10 +57,66 @@ var recordUncaller = cajita.freeze({
   },
 });
 
+// XXX We should extract this from the Cajita sharedImports, but that is not available from cajoled code.
+var sharedImports = cajita.freeze({
+  cajita: cajita,
+
+  'null': null,
+  'false': false,
+  'true': true,
+  'NaN': NaN,
+  'Infinity': Infinity,
+  'undefined': undefined,
+  parseInt: parseInt,
+  parseFloat: parseFloat,
+  isNaN: isNaN,
+  isFinite: isFinite,
+  decodeURI: decodeURI,
+  decodeURIComponent: decodeURIComponent,
+  encodeURI: encodeURI,
+  encodeURIComponent: encodeURIComponent,
+  escape: escape,
+  Math: Math,
+  JSON: JSON,
+
+  Object: Object,
+  Array: Array,
+  String: String,
+  Boolean: Boolean,
+  Number: Number,
+  Date: Date,
+  RegExp: RegExp,
+
+  Error: Error,
+  EvalError: EvalError,
+  RangeError: RangeError,
+  ReferenceError: ReferenceError,
+  SyntaxError: SyntaxError,
+  TypeError: TypeError,
+  URIError: URIError
+});
+
+// --- defaultEnv definition
+var defaultEnv = cajita.copy(sharedImports);
+defaultEnv["DataE_JS1_builtinsMaker"] = builtinsMaker;
+cajita.freeze(defaultEnv);
+
+// --- defaultUnenv definition
+// XXX defining unenvs as functions is bad for efficient union -- but it's difficult to do better given our options for object-keyed tables...
+var unenvBacking = cajita.newTable();
+cajita.forOwnKeys(defaultEnv, function (key) {
+  unenvBacking.set(defaultEnv[key], key);
+});
+function defaultUnenv(specimen) {
+  return unenvBacking.get(specimen);
+};
+defaultUnenv.toString = function () { return "[Data-E defaultUnenv]"; };
 
 // exports
 ({
   "builtinsUncaller": builtinsUncaller,
   "builtinsMaker": builtinsMaker,
-  "recordUncaller": recordUncaller
+  "recordUncaller": recordUncaller,
+  "defaultEnv": defaultEnv,
+  "defaultUnenv": defaultUnenv,
 });

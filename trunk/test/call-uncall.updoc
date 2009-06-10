@@ -105,3 +105,29 @@ The recordUncaller serializes objects which Cajita considers records (roughly, t
   ? [foo2["x"], foo2["y"]]
   # value: ["y", "z"]
 
+-------------------------------------------------------------------------------
+
+XXX review: This test doesn't fit the filename. Should it be moved or should the file be renamed?
+
+Default env for serialization purposes -- is the Cajita sharedImports plus the builtinsMaker.
+
+  ? def defaultEnv := exports["defaultEnv"]
+  # value: <{Array,Boolean,DataE_JS1_builtinsMaker,Date,Error,EvalError,Infinity,JSON,Math,NaN,Number,Object,RangeError,ReferenceError,RegExp,String,SyntaxError,TypeError,URIError,cajita,decodeURI,decodeURIComponent,encodeURI,encodeURIComponent,escape,false,isFinite,isNaN,null,parseFloat,parseInt,true,undefined}>
+
+  ? defaultEnv["DataE_JS1_builtinsMaker"] == builtinsMaker
+  # value: true
+  
+XXX not bothering to check that the other contents are the defaultEnv
+
+Default unenv: the inverse of the above
+
+  ? def defaultUnenv := exports["defaultUnenv"]
+  # value: [Data-E defaultUnenv]
+  
+  ? defaultUnenv(builtinsMaker) # (This is a function call because JS doesn't have subscript overloading/method)
+  # value: "DataE_JS1_builtinsMaker"
+  
+  ? defaultUnenv(true)
+  # value: "true"
+  
+  
