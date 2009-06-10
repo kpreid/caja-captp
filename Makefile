@@ -11,7 +11,7 @@ clean:
 
 lib: src/captp.out.js src/datae.out.js src/uncallers.out.js
 
-tests: test/call-uncall.live.xhtml test/captp-objects.live.xhtml test/datae.live.xhtml
+tests: test/call-uncall.live.xhtml test/captp-connection.live.xhtml test/captp-objects.live.xhtml test/datae.live.xhtml
 
 test: all
 	for f in test/*.live.xhtml; do python -m webbrowser "file://`pwd`/$$f"; done
