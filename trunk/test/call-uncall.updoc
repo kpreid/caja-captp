@@ -107,6 +107,39 @@ The recordUncaller serializes objects which Cajita considers records (roughly, t
 
 -------------------------------------------------------------------------------
 
+CycleBreaker. (The name is inherited from E.)
+
+This is a table which can store arbitrary objects as keys. It differs from cajita.newTable in coming in a const version, and being copyable and enumerable. (XXX these last parts not yet implemented.)
+
+  ? def CycleBreaker := exports["CycleBreaker"]; null
+
+For testing purposes, two objects which are identical in string form:
+
+  ? def o1 := js.asObject(["value" => 1])
+  > def o2 := js.asObject(["value" => 2])
+  > null
+
+  ? def inv := CycleBreaker.byInverting(js.asObject(["J" => js, "O" => 1, "A" => o1, "B" => o2]))
+  # value: [CycleBreaker]
+
+(Note this is actually the JS method "get"; the quotes and dots are E and EoJS mechanisms to distinguish from property access.)
+
+  ? inv.".get"(js)
+  # value: "J"
+  
+  ? inv.".get"(1)
+  # value: "O"
+  
+  ? inv.".get"(o1)
+  # value: "A"
+  
+  ? inv.".get"(o2)
+  # value: "B"
+
+
+
+-------------------------------------------------------------------------------
+
 XXX review: This test doesn't fit the filename. Should it be moved or should the file be renamed?
 
 Default env for serialization purposes -- is the Cajita sharedImports plus the builtinsMaker.
@@ -124,10 +157,9 @@ Default unenv: the inverse of the above
   ? def defaultUnenv := exports["defaultUnenv"]
   # value: [Data-E defaultUnenv]
   
-  ? defaultUnenv(builtinsMaker) # (This is a function call because JS doesn't have subscript overloading/method)
+  ? defaultUnenv.".get"(builtinsMaker)
   # value: "DataE_JS1_builtinsMaker"
   
-  ? defaultUnenv(true)
+  ? defaultUnenv.".get"(true)
   # value: "true"
-  
-  
+
