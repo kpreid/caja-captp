@@ -96,27 +96,38 @@ var sharedImports = cajita.freeze({
   URIError: URIError
 });
 
+// --- CycleBreaker
+var CycleBreaker = {};
+CycleBreaker.byInverting = function (table) {
+  var backing = cajita.newTable(false);
+  var s = "";
+  cajita.forOwnKeys(table, function (key) {
+    s += key;
+    backing.set(table[key], key);
+  });
+  return cajita.freeze({
+    toString: function () { return "[CycleBreaker]"; },
+    get: function (obj) { return backing.get(obj); }
+  });
+};
+cajita.freeze(CycleBreaker);
+
 // --- defaultEnv definition
 var defaultEnv = cajita.copy(sharedImports);
 defaultEnv["DataE_JS1_builtinsMaker"] = builtinsMaker;
 cajita.freeze(defaultEnv);
 
 // --- defaultUnenv definition
-// XXX defining unenvs as functions is bad for efficient union -- but it's difficult to do better given our options for object-keyed tables...
-var unenvBacking = cajita.newTable();
-cajita.forOwnKeys(defaultEnv, function (key) {
-  unenvBacking.set(defaultEnv[key], key);
-});
-function defaultUnenv(specimen) {
-  return unenvBacking.get(specimen);
-};
+var defaultUnenv = cajita.copy(CycleBreaker.byInverting(defaultEnv));
 defaultUnenv.toString = function () { return "[Data-E defaultUnenv]"; };
+cajita.freeze(defaultUnenv);
 
 // exports
 ({
   "builtinsUncaller": builtinsUncaller,
   "builtinsMaker": builtinsMaker,
   "recordUncaller": recordUncaller,
+  "CycleBreaker": CycleBreaker,
   "defaultEnv": defaultEnv,
   "defaultUnenv": defaultUnenv,
 });
