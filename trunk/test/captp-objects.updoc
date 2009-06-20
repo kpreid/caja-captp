@@ -21,7 +21,7 @@ The following code is boilerplate to load a Cajita module with collecting the re
   >   })
   > ]))
   
-  ? EoJS.asyncLoad("../src/captp.out.js")
+  ? EoJS.asyncLoad("../src/everything.out.js")
   
   ? interp.waitAtTop(exports)
 

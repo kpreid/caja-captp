@@ -9,12 +9,17 @@ all: lib tests
 clean:
 	rm -f src/*.out.js test/*.live.xhtml
 
-lib: src/captp.out.js src/datae.out.js src/uncallers.out.js
+lib: src/everything.out.js
 
-tests: test/call-uncall.live.xhtml test/captp-connection.live.xhtml test/captp-objects.live.xhtml test/datae.live.xhtml
+tests: test/call-uncall.live.xhtml test/captp-objects.live.xhtml test/datae.live.xhtml
 
 test: all
 	for f in test/*.live.xhtml; do python -m webbrowser "file://`pwd`/$$f"; done
+
+# -----------------------------------------------------------------------------
+
+src/everything.out.js: src/_header.js src/uncallers.out.js src/datae.out.js src/captp.out.js src/_footer.js
+	cat $^ > "$@"
 
 # -----------------------------------------------------------------------------
 
