@@ -1,6 +1,6 @@
 .PHONY: all clean lib tests test
 
-RUNE = rune -cpa eojs/lib-host -cpa eojs/tagsoup.jar
+RUNE = rune -Dfile.encoding=utf-8 -cpa eojs/lib-host -cpa eojs/tagsoup.jar
 
 # -----------------------------------------------------------------------------
 
@@ -11,14 +11,14 @@ clean:
 
 lib: src/everything.out.js
 
-tests: test/call-uncall.live.xhtml test/captp-objects.live.xhtml test/datae.live.xhtml
+tests: test/call-uncall.live.xhtml test/captp-objects.live.xhtml test/datae.live.xhtml test/SwissTable.live.xhtml
 
 test: all
 	for f in test/*.live.xhtml; do python -m webbrowser "file://`pwd`/$$f"; done
 
 # -----------------------------------------------------------------------------
 
-src/everything.out.js: src/_header.js src/uncallers.out.js src/datae.out.js src/captp.out.js src/_footer.js
+src/everything.out.js: src/_header.js src/sha1.out.js src/uncallers.out.js src/datae.out.js src/captp.out.js src/_footer.js
 	cat $^ > "$@"
 
 # -----------------------------------------------------------------------------
