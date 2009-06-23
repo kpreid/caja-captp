@@ -3,6 +3,83 @@
 // Copyright 2007-2009 Kevin Reid, under the terms of the MIT X license
 // found at http://www.opensource.org/licenses/mit-license.html ...............
 
+/**
+ * Are x and y not observably distinguishable?
+ * 
+ * -- Copied from cajita.js until such time as it exposes this function itself.
+ */
+function identical(x, y) {
+  if (x === y) {
+    // 0 === -0, but they are not identical
+    return x !== 0 || 1/x === 1/y;
+  } else {
+    // NaN !== NaN, but they are identical.
+    // NaNs are the only non-reflexive value, i.e., if x !== x,
+    // then x is a NaN.
+    return x !== x && y !== y;
+  }
+}
+
+// XXX To operate properly, this *SHOULD* be a crypto-strength PRNG.
+var entropy = cajita.freeze({
+  nextSwiss: function () {
+    // A swiss number is 20 octets or 160 bits. To generate this out of floats, we use Math.random several times. To fit this in a JavaScript value we use a string with 8 bits per character (which happens to be compatible with the sha1 library).
+    var swiss = "";
+    for (var i = 0; i < 20; i++) {
+      swiss += String.fromCharCode(Math.random() * 256);
+    }
+    return new Swiss(swiss);
+  }
+});
+
+
+// In E implementations SwissNumbers are long integers. JavaScript does not have long integers. So we use strings of character codes <256 denoting octets instead.
+// This wrapper provides the operations on it and also ensures that the bits are not leaked in an exception etc. by toString.
+function Swiss(value) {
+  cajita.enforceType(value, "string"); // XXX does not check details
+  return cajita.freeze({
+    // The function used to hash SwissBase->SwissNumber->SwissHash.
+    hash: function () {
+      return new Swiss(str_sha1(value));
+    },
+    
+    bits: value,
+
+    showBits: function () {
+      return binb2hex(str2binb(value));
+    },
+    
+    toString: function () {
+      return "[Swiss number]";
+    }
+  });
+}
+Swiss.enforce = function (value) {
+  return new Swiss(value.bits);
+};
+
+// The operations-on-promises object. XXX this needs to be split out so that Data-E code can use it.
+var Ref = cajita.freeze({
+  resolution: function (obj) { return obj; },
+  
+  // Is this object one such that the sameEver predicate gives the same answers as the identical predicate?
+  isSelfish: function () {
+    return true;
+  },
+  
+  // XXX Once we have promises this will become more complicated
+  sameYet: identical,
+  sameEver: identical,
+});
+
+function makeWeakKeyMap() { 
+  return cajita.newTable(true); 
+};
+function makeWeakValueMap() {
+  // XXX This does not produce even an approximation of a weak value map. Furthermore, cajita.newTable is moving to weak-key-table exclusively when possible; we need our own strategy.
+  return cajita.newTable(false);
+}
+
 var CommTableMixin = (function () {
   // The code within this block is derived, by way of the E-on-CL CapTP 
   // implementation, from the E-on-Java CapTP implementation, and is therefore:
@@ -69,7 +146,7 @@ var CommTableMixin = (function () {
 
       // The actual contents of the table.
       var myStuff = new Array(myCapacity);
-      myStuff[0] = null;
+      myStuff[0] = undefined;
       for (var i = 1; i < myCapacity; i++) {
           myStuff[i] = ThePumpkin;
       }
@@ -271,7 +348,7 @@ var CommTableMixin = (function () {
 
           self.mustBeAlloced(index);
           var result = myStuff[index];
-          if (ThePumpkin === result) {
+          if (identical(ThePumpkin, result)) {
               throw new Error("export: " + index + " is a pumpkin");
           }
           return result;
@@ -280,7 +357,7 @@ var CommTableMixin = (function () {
       /**
        *
        */
-      self.put = function (index, value, strict) {
+      self.set = function (index, value, strict) {
           if (strict === undefined) strict = false;
           cajita.enforceType(strict, "boolean");
           cajita.enforceNat(index);
@@ -355,6 +432,243 @@ var CommTableMixin = (function () {
   return CommTableMixin;
 })();
 
+/**
+ * A weak-value table mapping from SwissNumbers to references.
+ * <p/>
+ * There are two cases: 1) NEAR references to Selfish objects. 2) Everything
+ * else. For case #1, a backwards weak-key table is also maintained, such that
+ * multiple registrations of a NEAR Selfish object will always yield the same
+ * SwissNumber. This SwissNumber can then be (and is) used remotely to
+ * represent the sameness identity of resolved references to this Selfish
+ * object. Case #1 is used for both live and sturdy references.
+ * <p/>
+ * Case #2 is used only for sturdy references. The table only maps from
+ * SwissNumbers to references, not vice versa, so each registration assigns a
+ * new SwissNumber.
+ *
+ * @author Mark S. Miller
+ */
+function SwissTable() {
+  // The code within this block is derived, by way of the E-on-CL CapTP 
+  // implementation, from the E-on-Java CapTP implementation, and is therefore:
+  // Copyright 2002 Combex, Inc. under the terms of the MIT X license
+  // found at http://www.opensource.org/licenses/mit-license.html ...............
+  
+  // Maps from NEAR Selfish objects to SwissNumbers.
+  var mySelfishToSwiss = makeWeakKeyMap();
+
+  // Maps from SwissNumber to anything.
+  //
+  // Note: can't handle undefined values.
+  var mySwissToRef = makeWeakValueMap();
+
+  // OneArgFuncs that handle lookup faulting.
+  var mySwissDBs = [];
+
+  var swissTable = cajita.freeze({
+    toString: function () { return '[SwissTable]'; },
+
+    /**
+     * Lookup an object by SwissNumber. <p>
+     * <p/>
+     * If not found, throw an IndexOutOfBoundsException. This is necessary
+     * since undefined is a valid return value. (By decree, the SwissNumber 0
+     * designates undefined.)    // XXX caja-captp: Is using undefined as the special value important?
+     */
+    "lookupSwiss": function (swissNum) {
+      Swiss.enforce(swissNum);
+      if (0 === swissNum) {
+          //Since Weak*Maps can't handle nulls, we handle it ourselves. <- caja-captp: This is an inherited comment.
+          return undefined;
+      }
+      var res = mySwissToRef.get(swissNum);
+      if (res !== undefined) {
+        return res;
+      }
+      var swissHash = swissNum.hash();
+      for (var i = 0; i < mySwissDBs.length; i++) {
+          var db = mySwissDBs[i];
+          //give each fault handler a chance
+          db(swissHash);
+      }
+      //try one more time
+      res = mySwissToRef.get(swissNum);
+      if (res !== undefined) {
+        return res;
+      }
+      throw new Error("Swiss number not found");
+    },
+
+    /**
+     * A SwissDB is able to supplement the SwissTable's internal mySwissToRef
+     * table with further storage that gets faulted on demand. <p>
+     * <p/>
+     * When the SwissTable's lookupSwiss fails to find the swissNum in the
+     * internal table, it invokes each of its registered swissDBs with a hash
+     * of the swissNumber being looked up. This is known as a swissHash, and
+     * represents the identity of the object without providing any authority to
+     * access the object. A swissDB which has stored a representation of the
+     * object elsewhere should then register the object using registerIdentity
+     * or registerSwiss, both of which require the swissBase -- the archash of
+     * the swissNumber being looked up. In other words,
+     * <pre>
+     *     swissBase.cryptoHash() -> swissNum
+     *     swissNum.crytoHash()   -> swissHash
+     * </pre><p>
+     * <p/>
+     * If an already registered swissDB is re-registered, an exception is
+     * thrown.
+     */
+    addFaultHandler: function (swissDB) {
+      var i = mySwissDBs.indexOf(swissDB);
+      if (i < 0) {
+        mySwissDBs.push(swissDB);
+      }
+    },
+
+    /**
+     * Removes a registered (by addFaultHandler) swissDB. <p>
+     * <p/>
+     * If not there, this method does nothing.
+     */
+    removeFaultHandler: function (swissDB) {
+      var i = mySwissDBs.indexOf(swissDB);
+      mySwissDBs.splice(i, 1);
+    },
+
+    /**
+     * Returns the SwissNumber which represents the identity of this near
+     * Selfish object in this vat.
+     * <p/>
+     * If not 'Ref.isSelfish(obj)", then this will throw an Exception.
+     * <p/>
+     * This returns the unique SwissNumber which represents the designated near
+     * selfish object's unique identity within this vat. If the object wasn't
+     * yet associated with a SwissNumber, it will be now.
+     */
+    getIdentity: function (obj) {
+        obj = Ref.resolution(obj);
+        if (!Ref.isSelfish(obj)) {
+            throw new Error("Not Selfish: " + obj);
+        }
+        var result = mySelfishToSwiss.get(obj);
+        if (undefined === result) {
+            result = entropy.nextSwiss();
+            mySwissToRef.set(result, obj);
+            mySelfishToSwiss.set(obj, result);
+        }
+        return result;
+    },
+
+    /**
+     * Returns a SwissNumber with which this ref can be looked up.
+     * <p/>
+     * This method always assigns and returns a new unique SwissNumber (an
+     * integer of some type), even for NEAR Selfish objects that already have
+     * one, with one exception. The swissNumber for undefined is always 0.
+     *
+     * XXX the above seems to be false since the current implementation uses getIdentity
+     */
+    "getNewSwiss": function (ref) {
+        ref = Ref.resolution(ref);
+        if (Ref.sameYet(undefined, ref)) {
+            return 0;
+        }
+        if (Ref.isSelfish(ref)) {
+            return swissTable.getIdentity(ref);
+        }
+        var result = entropy.nextSwiss();
+        mySwissToRef.set(result, ref);
+        return result;
+    },
+
+    /**
+     * Registers obj to have the identity 'swissBase.cryptoHash()'. <p>
+     * <p/>
+     * The cryptoHash of a SwissBase is a SwissNumber, so we also say that the
+     * archash of a SwissNumber is a SwissBase. (Of course, our security rests
+     * on the assumption that the archash is infeasible to compute.) Since an
+     * unconfined client of an object can often get its SwissNumber, something
+     * more is needed to establish authority to associate an object with a
+     * SwissNumber. For this "something more", we use knowledge of the archash
+     * of the number. <p>
+     * <p/>
+     * The object is given the new identity 'swissBase cryptoHash()', assuming
+     * this doesn't conflict with any existing registrations. If it does, an
+     * exception is thrown.
+     */
+    "registerIdentity": function (obj, swissBase) {
+      Swiss.enforce(swissBase);
+      obj = Ref.resolution(obj);
+      if (!Ref.isSelfish(obj)) {
+          throw new Error("Not Selfish: " + obj);
+      }
+      var result = swissBase.hash();
+      var oldObj =
+        Ref.resolution(mySwissToRef.fetch(result, function () { return obj; }));
+      require(undefined === oldObj || identical(oldObj, obj),
+              function () { return "SwissNumber already identifies a different object: " +
+                            result; });
+      var oldSwiss =
+        mySelfishToSwiss.fetch(obj, function () { return result; });
+      if (oldSwiss != result) {
+        throw new Error("Object already has a different identity: " +
+                        oldSwiss + " vs " + result);
+      }
+      mySelfishToSwiss.set(obj, result);
+      mySwissToRef.set(result, obj);
+      return result;
+    },
+
+    /**
+     * Registers ref at 'swissBase.cryptoHash()'.
+     * <p/>
+     * registerNewSwiss() is to registerIdentity() as getNewSwiss() is to
+     * getIdentity(). 'swissBase.cryptoHash()' must not already be registered,
+     * or an exception will be thrown. If ref is null, an exception is thrown
+     * (since we assume its infeasible to find the archash of zero).
+     */
+    registerNewSwiss: function (ref, swissBase) {
+        Swiss.enforceSwiss(swissBase);
+        ref = Ref.resolution(ref);
+        var result = swissBase.hash();
+        if (undefined === ref) {
+            //XXX In just the way the following is careful not to reveal more
+            //than a swissHash in a thrown exception, we need to go through the
+            //rest of the swissNumber and swissBase handling logic and make it
+            //do likewise.
+            var swissHash = result.hash();
+            throw new Error("May not re-register undefined for swissHash: " + E.toString(swissHash));
+        }
+        var oldRef = mySwissToRef.get(result);
+        if (undefined === oldRef) {
+            mySwissToRef.set(result, ref);
+        } else if (identical(ref, oldRef)) {
+            // Registering the same object with the same base is cool.
+            // XXX should we use Ref.same(..) instead of == ?
+        } else {
+            var swissHash = result.hash();
+            throw new Error("An object with swissHash " + swissHash +
+              "is already registered");
+        }
+        return result;
+    },
+
+    /**
+     * A convenience method typically used to obtain new SwissBases (archashes
+     * of SwissNumbers).
+     * <p/>
+     * Since a client of SwissTable can obtain such entropy from the SwissTable
+     * anyway, by registering objects, there's no loss of security in providing
+     * this convenience method.
+     */
+    nextSwiss: function () {
+      return entropy.nextSwiss();
+    }
+  });
+  return swissTable;
+}
+
 function AnswersTable() {
   var self = {};
   self = new CommTableMixin(self);
@@ -417,7 +731,7 @@ function ExportsTable() {
   //    // XXX kpreid wonders whether allowing coercion is correct here, and also about the consequences of failing at this point
   //    pbp = PassByProxy.coerce(pbp); // XXX JS translation: PassByProxy doesn't exist
   //    var index = exportsTable.bind(pbp);
-  //    myPBPMap.put(pbp, index, true);
+  //    myPBPMap.set(pbp, index, true);
   //    return index;
   //};
 
@@ -439,28 +753,28 @@ function ProxiesTable() {
 function NearGiftTable() {
   /// XXX fill out
   return cajita.freeze({
-    toString: function () { return '<nearGiftTable>'; },
+    toString: function () { return '<nearGiftTable>'; }
   });
 }
 
 function PromiseGiftTable() {
   /// XXX fill out
   return cajita.freeze({
-    toString: function () { return '<promiseGiftTable>'; },
+    toString: function () { return '<promiseGiftTable>'; }
   });
 }
 
 function NonceLocator() {
   /// XXX fill out
   return cajita.freeze({
-    toString: function () { return '<nonceLocator>'; },
+    toString: function () { return '<nonceLocator>'; }
   });
 }
 
 function LocatorUnum() {
   /// XXX fill out
   return cajita.freeze({
-    toString: function () { return '<locatorUnum>'; },
+    toString: function () { return '<locatorUnum>'; }
   });
 }
 
@@ -468,7 +782,7 @@ function LocatorUnum() {
 function CapTPConnection() {
   /// XXX fill out
   return cajita.freeze({
-    toString: function () { return '<CapTPConnection>'; },
+    toString: function () { return '<CapTPConnection>'; }
   });
 }
 
@@ -483,4 +797,7 @@ function CapTPConnection() {
   "PromiseGiftTable": PromiseGiftTable,
   "NonceLocator": NonceLocator,
   "LocatorUnum": LocatorUnum,
+  
+  "Swiss": Swiss,
+  "SwissTable": SwissTable,
 });
