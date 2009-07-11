@@ -1,0 +1,397 @@
+# Copyright 2005-2009 Kevin Reid, under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+-------------------------------------------------------------------------------
+-- This file was derived from E-on-CL; improvements should be shared insofar as they are not JS-specific --
+-------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------
+The following code is boilerplate to load a Cajita module with collecting the return value. This code should be folded into some Cajita or EoJS library.
+
+  ? def js := <import:org.erights.eojs.jsTools>; null
+
+  ? def cajita := <import:org.erights.eojs.cajita>; null
+
+  ? def exports; null
+  
+  ? def oldNewModuleHandler := cajitaPriv.getNewModuleHandler()
+  > cajitaPriv.setNewModuleHandler(js.asObject([
+  >   "handle" => js.asFunction(fn newModule {
+  >     bind exports := newModule.instantiate(cajitaPriv.get___(), cajita.freeze(oldNewModuleHandler.getImports()))
+  >     #bind exports := newModule.instantiate(cajitaPriv.get___(), oldNewModuleHandler.getImports())
+  >   })
+  > ]))
+  
+  ? EoJS.asyncLoad("../src/everything.out.js")
+  
+  ? interp.waitAtTop(exports)
+
+-------------------------------------------------------------------------------
+
+This file is testing the Caja-CapTP Ref object. However, this test file is itself written in E, which itself uses the Ref name, so we must use a different local name.
+
+  ? def jsRef := exports["Ref"]
+  # value: [Caja-CapTP Ref]
+
+  ? def promiseRecTuple(r,_) { return [r["promise"], r["resolver"]] }; null
+
+We can't interp.waitAtTop on an Caja-CapTP promise directly, so an adapter
+
+  ? def convertPromise(ccPromise) {
+  >   traceln("convertPromise entry " + E.toString(ccPromise))
+  >   def [eojsPromise, resolver] := Ref.promise()
+  >   jsRef.whenResolvedOnly(ccPromise, js.asFunction(def convertPromiseReactor(res) {
+  >     traceln("convertPromise callback " + E.toString(ccPromise) + " " + res)
+  >     resolver.resolve(res)
+  >   }))
+  >   return eojsPromise
+  > }; null
+
+-------------------------------------------------------------------------------
+
+XXX very incomplete tests - the first group originally written just to test the print value of a closed resolver
+  
+  ? def via (promiseRecTuple) [p, r] := jsRef.promise()
+  # value: <{promise,resolver}>
+  
+  ? r.isDone()
+  # value: false
+  
+  ? jsRef.resolution(p)
+  # value: [Promise]
+  
+  ? jsRef.fulfillment(p, "foo")
+  # problem: Error: Ref.fulfillment: unresolved reference (foo)
+  
+  ? [r.resolve(1)]
+  # value: [<JS undefined>]
+  
+  ? r
+  # value: [Closed Resolver]
+  
+  ? r.isDone()
+  # value: true
+  
+  ? jsRef.fulfillment(p, "foo")
+  # value: 1
+
+resolver#resolve
+
+  ? def via (promiseRecTuple) [p, r] := jsRef.promise()
+  # value: <{promise,resolver}>
+  
+  ? r.isDone()
+  # value: false
+  
+  ? [r.resolve(1), jsRef.resolution(p), r]
+  # value: [<JS undefined>, 1, [Closed Resolver]]
+
+  ? r.isDone()
+  # value: true
+  
+  ? r.resolve(2)
+  # problem: Error: this resolver's ref has already been resolved, therefore cannot be resolved
+  
+  ? [jsRef.resolution(p), r]
+  # value: [1, [Closed Resolver]]
+  
+  ? r.isDone()
+  # value: true
+
+resolver#resolveRace
+
+  ? def via (promiseRecTuple) [p, r] := jsRef.promise()
+  # value: <{promise,resolver}>
+  
+  ? r.isDone()
+  # value: false
+  
+  ? [r.resolveRace(1), jsRef.resolution(p), r]
+  # value: [true, 1, [Closed Resolver]]
+
+  ? r.isDone()
+  # value: true
+  
+  ? [r.resolveRace(2), jsRef.resolution(p), r]
+  # value: [false, 1, [Closed Resolver]]
+  
+  ? r.isDone()
+  # value: true
+  
+Ref
+
+  ? jsRef
+  # value: [Caja-CapTP Ref]
+  
+ resolution (shortens references; transparent.)
+ 
+  ? jsRef.resolution("null")
+  # value: "null"
+ 
+  ? jsRef.resolution(jsRef.broken("bang"))
+  # value: [Broken: Error: bang]
+ 
+  ? jsRef.resolution(def p := jsRef.promise()["promise"]) == p
+  # value: true
+ 
+ broken
+  
+  ? jsRef.broken("bang")
+  # value: [Broken: Error: bang]
+  
+  ? jsRef.broken(js.undefined())
+  # problem: Error: May not use undefined as an error
+
+ isNear
+
+  ? jsRef.isNear(1)
+  # value: true
+  
+  ? jsRef.isNear(jsRef.promise()["promise"])
+  # value: false
+
+  ? jsRef.isNear(jsRef.promise())
+  # value: true
+
+  ? jsRef.isNear(jsRef.broken("biff"))
+  # value: false
+
+  XXX isNear with far refs
+
+ isSettled
+ 
+  ? jsRef.isSettled(1)
+  # value: true
+ 
+  ? jsRef.isSettled([1])
+  # value: true
+
+  ? jsRef.isSettled(jsRef.promise()["promise"])
+  # value: false
+
+  XXX passbycopy not implemented for now
+  x ? jsRef.isSettled(def settled_test_pair := jsRef.promise())
+  x # value: false
+  x 
+  x ? settled_test_pair["resolver"].resolve(2)
+  x # value: <JS undefined>
+  x 
+  x ? jsRef.isSettled(settled_test_pair)
+  x # value: true
+  
+  ? jsRef.isSettled(jsRef.broken("biff"))
+  # value: true
+  
+ isFar
+ 
+  XXX test with actual Far ref
+  
+  ? jsRef.isFar(1)
+  # value: false
+    
+  ? jsRef.isFar(245398378954763192874789237489237483234532523463467)
+  # value: false
+  
+  ? jsRef.isFar({def x; x})
+  # value: false
+  
+  ? jsRef.isFar(def y {})
+  # value: false
+  
+  ? jsRef.isFar(jsRef.broken("you'll never know"))
+  # value: false
+
+ isResolved
+
+  ? jsRef.isResolved("idea")
+  # value: true
+
+  ? jsRef.isResolved(jsRef.broken("nope"))
+  # value: true
+
+  ? jsRef.isResolved(jsRef.promise()["promise"])
+  # value: false
+  
+ fulfillment
+
+  ? jsRef.fulfillment("null")
+  # value: "null"
+
+  ? jsRef.fulfillment(jsRef.broken("bang"))
+  # problem: Error: bang
+  
+  ? jsRef.fulfillment(jsRef.promise()["promise"])
+  # problem: Error: Ref.fulfillment: unresolved reference
+
+ optProblem
+
+  ? [jsRef.optProblem('r')]
+  # value: [<JS undefined>]
+
+  ? jsRef.optProblem(jsRef.broken("expected"))
+  # value: Error: expected
+
+  ? [jsRef.optProblem(jsRef.promise()["promise"])]
+  # value: [<JS undefined>]
+  
+ isEventual
+
+  ? jsRef.isEventual("idea")
+  # value: false
+
+  ? jsRef.isEventual(jsRef.broken("nope"))
+  # value: false
+
+  ? jsRef.isEventual(jsRef.promise()["promise"])
+  # value: true
+
+ isSelfish
+ 
+  ? jsRef.isSelfish("a")
+  # value: false
+  
+  ? jsRef.isSelfish(def _ {})
+  # value: true
+  
+  ? jsRef.isSelfish(jsRef)
+  # value: true
+
+  ? jsRef.isSelfish(js.asFunction(fn {}))
+  # value: true
+
+  ? jsRef.isSelfish(js.asObject([].asMap()))
+  # value: true
+
+  XXX passbycopy not implemented for now
+  x ? jsRef.isSelfish([jsRef])
+  x # value: false
+    
+  ? jsRef.isSelfish(interp)
+  # value: true
+
+ optSealedDispatch
+ 
+  In Caja-CapTP which is *not* an E implementation, we have skipped the Miranda-method part of __optSealedDispatch and just used it for proxy unsealing.
+  
+  ? jsRef.optSealedDispatch(def _ {}, 1)
+  # value: <JS undefined>
+  
+  ? jsRef.optSealedDispatch(jsRef.broken("optSealedDispatch test broken"), 1)
+  # value: <JS undefined>
+  
+  ? jsRef.optSealedDispatch(jsRef.promise()["promise"], 1)
+  # value: <JS undefined>
+  
+  ? jsRef.optSealedDispatch(
+  >   jsRef.Proxy(js.asObject(["handleOptSealedDispatch" =>
+  >                                  js.asFunction(fn b { ["ok", b] })]),
+  >                   jsRef.promise()["promise"], false),
+  >   1)
+  # value: ["ok", 1]
+  
+ whenResolved
+ 
+  Checking that __whenMoreResolved is sent send-only.
+  ? def done
+  > jsRef.whenResolved(
+  >   jsRef.Proxy(js.asObject(["handleSendOnly" =>
+  >                                 js.asFunction(fn verb,args { print(verb, args); bind done := true })]),
+  >                   jsRef.promise()["promise"], false),
+  >   js.asFunction(fn _ {}))
+  > interp.waitAtTop(done)
+  > null
+  # stdout: CapTP__whenMoreResolved[[SafeWhenResolvedReactor]]
+
+ whenResolvedOnly
+ 
+  whenResolvedOnly, unlike whenResolved, does not collect the result of the reactor, and so can sendOnly to it.
+
+  ? def done
+  > def r := jsRef.whenResolvedOnly(
+  >   1,
+  >   jsRef.Proxy(js.asObject(["handleSendOnly" =>
+  >                                 js.asFunction(fn verb,args { print(verb, args); bind done := true })]),
+  >                   jsRef.promise()["promise"], true))
+  > interp.waitAtTop(done)
+  > r
+  # value: <JS undefined>
+  
+  # stdout: call[USELESS, 1]
+  
+  XXX write tests for waiting behavior
+  XXX the above two tests look similar but do completely different things; this should be clarified and other tests written
+
+Bugfix test: promise ref not propagating opt-problem correctly
+
+  ? def via (promiseRecTuple) [p, r] := jsRef.promise()
+  # value: <{promise,resolver}>
+  
+  ? r.smash("boink")
+  # value: <JS undefined>
+  
+  ? jsRef.optProblem(p)
+  # value: Error: boink
+
+Broken reference details
+  XXX this updoc script is ordering-fragile
+
+  ? def printingReactor := js.asFunction(fn obj { print(obj) }); null
+
+Broken references respond specially to sends or calls of whenMoreResolved and whenBroken (invoking the reactor) but still have normal broken-ref behavior of throwing.
+XXX the odd wording of the error message is an EoJS quirk, to be resolved later.
+  ? jsRef.broken("biff").CapTP__whenMoreResolved(printingReactor) 
+  # problem: Error: biff
+  
+  # stdout: [Broken: Error: biff]
+  
+  ? jsRef.broken("biff").CapTP__whenBroken(printingReactor) 
+  # problem: Error: biff
+  
+  # stdout: [Broken: Error: biff]
+
+  ? jsRef.send(jsRef.broken("biff"), "CapTP__whenMoreResolved", [printingReactor])
+  # value: [Broken: Error: biff]
+  
+  # stdout: [Broken: Error: biff]
+
+  ? jsRef.send(jsRef.broken("biff"), "CapTP__whenBroken", [printingReactor])
+  # value: [Broken: Error: biff]
+  
+  # stdout: [Broken: Error: biff]
+
+  Checking that the WMR reactor is invoked sendOnly.
+  ? jsRef.send(jsRef.broken("biff"), "CapTP__whenMoreResolved", [
+  >   jsRef.Proxy(js.asObject([
+  >                 "handleSend" => js.asFunction(fn verb,args { print("wmrSendOnly wrong SEND ", verb, args) }),
+  >                 "handleSendOnly" => js.asFunction(fn verb,args { print("wmrSendOnly ", verb, args) })
+  >               ]),
+  >               jsRef.promise()["promise"], false)]); null
+  # stdout: wmrSendOnly run[[Broken: Error: biff]]
+  
+  Checking that sendOnly on a broken reference works.
+  ? jsRef.sendOnly(jsRef.broken("biff"), "CapTP__whenBroken", [printingReactor])
+  # value: <JS undefined>
+  
+  # stdout: [Broken: Error: biff]
+  
+
+Checking that a chain of promises does not accumulate a chain of resolved forwarders. (XXX disabled for now in these tests because there are no exposed privileged facilities to peek at refs.)
+
+  ? def via (promiseRecTuple) [p, var r] := jsRef.promise()
+  # value: <{promise,resolver}>
+  
+  ? for _ in [1,2,3,4,5] {
+  >   def via (promiseRecTuple) [q, s] := jsRef.promise()
+  >   r.resolve(q)
+  >   r := s
+  > }
+  > r.resolve(true)
+  # value: <JS undefined>
+  
+  checking our assumption
+  ? p["CapTP__ref"] # should not be null
+  # value: (box)
+  
+  x checking the actual desired condition
+  x ? XXX we need a way to inspect the single-level shortening
+  x # value: boolean
