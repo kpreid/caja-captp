@@ -24,7 +24,7 @@
     })();
     
     var tameConsole;
-    if (console) {
+    if (window.console) {
       var tameConsole = cajita.freeze({
         log: ___.frozenFunc(function (text) {
           cajita.enforceType(text, "string");
