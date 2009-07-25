@@ -41,7 +41,7 @@ We can't interp.waitAtTop on an Caja-CapTP promise directly, so an adapter
   >   traceln("convertPromise entry " + E.toString(ccPromise))
   >   def [eojsPromise, resolver] := Ref.promise()
   >   jsRef.whenResolvedOnly(ccPromise, js.asFunction(def convertPromiseReactor(res) {
-  >     traceln("convertPromise callback " + E.toString(ccPromise) + " " + res)
+  >     traceln("convertPromise callback " + E.toString(ccPromise) + " " + E.toString(res))
   >     resolver.resolve(res)
   >   }))
   >   return eojsPromise
@@ -291,6 +291,13 @@ Ref
   
  whenResolved
  
+  Checking that miranda whenMoreResolved works.
+  ? jsRef.call(js.asObject([].asMap()), "CapTP__whenMoreResolved", [js.asFunction(fn r { println("=> ", r) })])
+  # value: <JS undefined>
+  
+  # stdout: => <{}>
+  #         
+ 
   Checking that __whenMoreResolved is sent send-only.
   ? def done
   > jsRef.whenResolved(
@@ -303,6 +310,12 @@ Ref
   # stdout: CapTP__whenMoreResolved[[SafeWhenResolvedReactor]]
 
  whenResolvedOnly
+
+  On a near ref:
+  ? jsRef.whenResolvedOnly(1, js.asFunction(fn r { print("=> ", r) }))
+  # value: <JS undefined>
+  
+  # stdout: => 1
  
   whenResolvedOnly, unlike whenResolved, does not collect the result of the reactor, and so can sendOnly to it.
 
@@ -318,8 +331,7 @@ Ref
   
   # stdout: call[USELESS, 1]
   
-  XXX write tests for waiting behavior
-  XXX the above two tests look similar but do completely different things; this should be clarified and other tests written
+  XXX write more tests for waiting behavior
 
 Bugfix test: promise ref not propagating opt-problem correctly
 
@@ -366,7 +378,7 @@ XXX the odd wording of the error message is an EoJS quirk, to be resolved later.
   >                 "handleSendOnly" => js.asFunction(fn verb,args { print("wmrSendOnly ", verb, args) })
   >               ]),
   >               jsRef.promise()["promise"], false)]); null
-  # stdout: wmrSendOnly run[[Broken: Error: biff]]
+  # stdout: wmrSendOnly call[USELESS, [Broken: Error: biff]]
   
   Checking that sendOnly on a broken reference works.
   ? jsRef.sendOnly(jsRef.broken("biff"), "CapTP__whenBroken", [printingReactor])
