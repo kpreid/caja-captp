@@ -1,0 +1,348 @@
+# Copyright 2005-2009 Kevin Reid, under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+  ? pragma.syntax("0.9")
+
+-------------------------------------------------------------------------------
+-- This file was derived from E-on-CL; improvements should be shared insofar as they are not JS-specific --
+-------------------------------------------------------------------------------
+The following code is boilerplate to load a Cajita module with collecting the return value. This code should be folded into some Cajita or EoJS library.
+
+  ? def js := <import:org.erights.eojs.jsTools>; null
+
+  ? def cajita := <import:org.erights.eojs.cajita>; null
+
+  ? def exports; null
+  
+  ? def oldNewModuleHandler := cajitaPriv.getNewModuleHandler()
+  > cajitaPriv.setNewModuleHandler(js.asObject([
+  >   "handle" => js.asFunction(fn newModule {
+  >     bind exports := newModule.instantiate(cajitaPriv.get___(), cajita.freeze(oldNewModuleHandler.getImports()))
+  >     #bind exports := newModule.instantiate(cajitaPriv.get___(), oldNewModuleHandler.getImports())
+  >     cajitaPriv.setNewModuleHandler(oldNewModuleHandler)
+  >   })
+  > ]))
+  
+  ? EoJS.asyncLoad("../src/everything.out.js")
+  
+  ? interp.waitAtTop(exports)
+
+-------------------------------------------------------------------------------
+
+This file is testing the Caja-CapTP Ref object. However, this test file is itself written in E, which itself uses the Ref name, so we must use a different local name.
+
+  ? def jsRef := exports["Ref"]
+  # value: [Caja-CapTP Ref]
+
+  ? def promiseRecTuple(r,_) { return [r["promise"], r["resolver"]] }; null
+
+We can't interp.waitAtTop on an Caja-CapTP promise directly, so an adapter
+
+  ? def convertPromise(ccPromise) {
+  >   traceln("convertPromise entry " + E.toString(ccPromise))
+  >   def [eojsPromise, resolver] := Ref.promise()
+  >   jsRef.whenResolvedOnly(ccPromise, js.asFunction(def convertPromiseReactor(res) {
+  >     traceln("convertPromise callback " + E.toString(ccPromise) + " " + E.toString(res))
+  >     resolver.resolve(res)
+  >   }))
+  >   return eojsPromise
+  > }; null
+
+-------------------------------------------------------------------------------
+
+User-defined Far refs and remote promises
+
+  ? def makeProxy := jsRef["Proxy"]; null
+ 
+--- Far Ref
+
+  ? var i := 0
+  > def exampleBrand {}
+  > null
+
+  ? def farHandler := js.asObject([
+  >   "handleSend" => js.asFunction(def _(verb, args) :any {
+  >     println("handleSend ", verb, " ", args)
+  >     return [i += 1, verb, args]
+  >   }),
+  >   "handleSendOnly" => js.asFunction(def _(verb, args) :any {
+  >     println("handleSendOnly ", verb, " ", args)
+  >     return [i += 1, verb, args] # should not be returned from the proxy
+  >   }),
+  >   "handleOptSealedDispatch" => js.asFunction(def _(brand) {
+  >     println("handleOptSealedDispatch ", brand)
+  >     if (brand == exampleBrand) {
+  >       return def brandResult {}
+  >     }
+  >   })
+  > ])
+  # value: <{handleOptSealedDispatch,handleSend,handleSendOnly}>
+
+The second argument to makeProxy is the resolution of a remote promise, or the failure of a Far reference; the third is whether the proxy is resolved. These components together completely define the identity of a proxy.
+
+  ? def remote := makeProxy(farHandler, (def pr := jsRef.promise(); def resolver := pr["resolver"]; pr["promise"]), true)
+  # value: [Far ref]
+  
+XXX we have no analogue of this
+  x ? remote.hi()
+  x # problem: Failed: not synchronously callable
+
+  ? pragma.enable("accumulator")
+  > accum [] for verb in ["isBroken", "isNear", "isEventual", "isFar", "isSettled", "isResolved", "optProblem"] { _.with(jsRef[verb](remote)) }
+  # value: [false, false, true, true, true, true, <JS undefined>]
+
+XXX no traversal keys yet
+  x ? def remoteKey := __equalizer.makeTraversalKey(remote)
+  x # value: <a traversal key>
+
+-- Send on Far ref
+
+  ? def firstResponse := jsRef.send(remote, "first", [])
+  # value: [Promise]
+  
+  # stdout: handleSend first []
+  #         
+  
+Notice that even though the handler is written to resolve it immediately, the response remains a promise during the first turn. This is done deliberately so that user-implemented proxies cannot have synchronous effects during a Ref.send.
+
+  ? interp.waitAtTop(convertPromise(firstResponse))
+  
+  ? jsRef.fulfillment(firstResponse)
+  # value: [1, "first", []]
+
+-- Send-only
+
+  ? jsRef.sendOnly(remote, "only", [])
+  # value: <JS undefined>
+
+  # stdout: handleSendOnly only []
+  #         
+  
+-- Breaking Far ref
+
+  ? [jsRef.optProblem(remote), 
+  >  resolver.resolve([jsRef.broken("gone away")]),
+  >  jsRef.optProblem(remote)]
+  # value: [<JS undefined>, <JS undefined>, Error: gone away]
+  
+  ? jsRef.send(remote, "msg", [])
+  # value: [Broken: Error: gone away]
+
+XXX no traversal keys yet
+  x confirm sameness as best we can
+  x ? __equalizer.makeTraversalKey(remote) == remoteKey
+  x # value: true
+
+(The synchronous visibility of sends on a broken reference is a separate issue, and works the same way for jsRef.broken/1)
+
+--- Remote Promise
+  
+  ? def promiseHandler {}
+  # value: <promiseHandler>
+  
+  ? def remotePromise := makeProxy(promiseHandler, (def pr := jsRef.promise(); def resolver := pr["resolver"]; pr["promise"]), false)
+  # value: [Promise]
+  
+  ? jsRef.fulfillment(remotePromise, "expected")
+  # problem: Error: Ref.fulfillment: unresolved reference (expected)
+  
+  ? pragma.enable("accumulator")
+  > accum [] for verb in ["isBroken", "isNear", "isEventual", "isFar", "isSettled", "isResolved", "optProblem"] { _.with(jsRef[verb](remotePromise)) }
+  # value: [false, false, true, false, false, false, <JS undefined>]
+  
+  ? resolver.resolve(def promiseResolution {}; [promiseResolution])
+  # value: <JS undefined>
+  
+  ? jsRef.fulfillment(remotePromise, "unexpected")
+  # value: <promiseResolution>
+  
+  ? jsRef.fulfillment(remotePromise) == promiseResolution # XXX This should be a Caja-CapTP sameness operation
+  # value: true
+  
+  ? pragma.enable("accumulator")
+  > accum [] for verb in ["isBroken", "isNear", "isEventual", "isFar", "isSettled", "isResolved", "optProblem"] { _.with(jsRef[verb](remotePromise)) }
+  # value: [false, true, false, false, true, true, <JS undefined>]
+
+--- Promise resolution cases
+
+The current implementation checks for the resolution promise becoming resolved each time the proxy is used in some way, and converts it into a forwarding ref upon that resolution. This section tests such usage. -- XXX this remark is about E-on-CL, not Caja-CapTP. But the tests haven't been *changed*
+
+  ? def makeJustResolved(value) :any {
+  >   def resBoxPR := jsRef.promise()
+  >   def p := makeProxy(promiseHandler, resBoxPR["promise"], false)
+  >   resBoxPR["resolver"].resolve([value])
+  >   return p
+  > }; null
+
+  ? jsRef.fulfillment(makeJustResolved("ABC"), "unexpected")
+  # value: "ABC"
+
+  ? jsRef.call(makeJustResolved("ABC"), "toLowerCase", [])
+  # value: "abc"
+
+  x ? jsRef.state(makeJustResolved(1))
+  x # value: "NEAR"
+  x 
+  x ? jsRef.state(makeJustResolved(jsRef.broken("fb")))
+  x # value: "BROKEN"
+  x 
+  x ? interp.waitAtTop(convertPromise(1))
+  x 
+  x ? def pr := jsRef.promise()
+  x > interp.waitAtTop(convertPromise(pr["promise"]))
+  x > pr["resolver"].resolve(1)
+  x # value: <JS undefined>
+  x 
+  x ? traceln("--- setting up promise")
+  x > def p := jsRef.send(js.asFunction(println), "call", [null, "debugging2"])
+  x > def q := convertPromise(p)
+  x > traceln("--- done convertPromise")
+  x # value: <Promise>
+  x 
+  x # stdout: debugging2
+  x #         
+  x ? traceln("--- expecting completion"); [p,q]
+  x ? [p,q]
+  x 
+  x 
+  x ? interp.waitAtTop(convertPromise(jsRef.send(js.asFunction(println), "call", [null, "debugging0"])))
+  x 
+  x # stdout: debugging0
+  x #         
+  x 
+  x ? convertPromise(jsRef.send(makeJustResolved(js.asFunction(println)), "call", [null, "debugging"]))
+  x # value: <Promise>
+  x 
+  x # stdout: debugging
+  x #         
+  
+  ? interp.waitAtTop(convertPromise(jsRef.send(makeJustResolved(js.asFunction(println)), "call", [null, "ok"])))
+  # stdout: ok
+  #         
+  
+  ? jsRef.sendOnly(def p := makeJustResolved(js.asFunction(println)), "call", [null, "ok2"])
+  > interp.waitAtTop(convertPromise(jsRef.send(p, "arbitraryjfwoe48AH#*RIO", [])))
+  # stdout: ok2
+  #         
+
+XXX the following tests are disabled until such time as we have E-style sameness as a feature
+  x --- Sameness of Far refs
+  x 
+      ? def stubHandler := js.asObject([].asMap())
+      # value: <{}>
+  x   
+  x   ? def stubResolution := jsRef.promise()["promise"]
+  x   # value: [Promise]
+  x 
+  x   different proxies, same identity
+  x   ? makeProxy(def fi1 {}, stubResolution, true) == makeProxy(fi1, stubResolution, true)
+  x   # value: true
+  x 
+  x   different proxies, different identity
+  x   ? makeProxy(fi1, stubResolution, true) == makeProxy(def fi2 {}, stubResolution, true)
+  x   # value: false
+  x 
+  x   different proxies, different instantiation of same Selfless identity
+  x   ? makeProxy([fi1], stubResolution, true) == makeProxy([fi1], stubResolution, true)
+  x   # value: true
+  x   
+  x   unresolved one
+  x   ? makeProxy(stubHandler, stubResolution, false) == makeProxy(stubHandler, stubResolution, true)
+  x   # problem: InsufficientlySettledException: not sufficiently settled: [Promise] == [Far ref]
+  x 
+  x   unresolved both
+  x   ? makeProxy(stubHandler, stubResolution, false) == makeProxy(stubHandler, stubResolution, false)
+  x   # problem: InsufficientlySettledException: not sufficiently settled: [Promise] == [Promise]
+  x 
+  x   unresolved-but-same
+  x   ? (def pr := makeProxy(stubHandler, stubResolution, false)) == pr
+  x   # value: true
+  x   
+  x Becoming-same resolutions: A Far ref must not change its identity, as it is resolved. Therefore, a Far ref's identity is not based on the resolution promise but rather the traversal-key of the promise at the time of proxy creation.
+  x   ? def p1 := makeProxy(stubHandler, (def r1;r1), true)
+  x   > def p2 := makeProxy(stubHandler, (def r2;r2), true)
+  x   > p1 == p2
+  x   # value: false
+  x   
+  x   ? bind r2 := r1; null
+  x 
+  x   ? p1 == p2
+  x   # value: false
+  x   -- this is what we're checking for
+  x   
+  x --- Sameness of broken Far references
+  x 
+  x   ? def sbfr := jsRef.promise()["promise"]
+  x   > def p1 := makeProxy(def sbfh {}, sbfr, true)
+  x   # value: [Far ref]
+  x 
+  x   ? def p2 := makeProxy(sbfh, sbfr, true)
+  x   # value: [Far ref]
+  x 
+  x   ? def sbfr2 := jsRef.promise()["promise"]
+  x   > def pO := makeProxy(def sbfh2 {}, sbfr2, true)
+  x   # value: [Far ref]
+  x   
+  x   ? p1 == p2
+  x   # value: true
+  x   
+  x   ? p1 == pO
+  x   # value: false
+  x 
+  x   ? def p := jsRef.broken("yellow")
+  x   > for x in [sbfr__Resolver, sbfr2__Resolver] { x.resolve([p]) }
+  x 
+  x   ? p1
+  x   # value: [Broken by Error: yellow]
+  x   
+  x   ? p1 == p2
+  x   # value: true
+  x 
+  x   ? p1 == pO
+  x   # value: false
+  x 
+--- Failure cases
+
+Unsettled handler
+
+  XXX not applicable because we don't have sameness yet
+  x ? makeProxy(jsRef.promise(), jsRef.promise()["promise"], false)
+  x # problem: NotSettledException: not settled: proxy handler [[Promise], <Resolver>]
+
+Bad resolution box
+  
+  ? { def remote := makeProxy(stubHandler, (def pr := jsRef.promise(); def resolver := pr["resolver"]; pr["promise"]), false)
+  >   resolver.resolve(false)
+  >   jsRef.call(remote, "foo", []) }
+  # problem: Error: Resolution promise of a proxy handled by [object Object] didn't resolve to a 1-element array, but false.
+
+  ? { def remote := makeProxy(stubHandler, (def pr := jsRef.promise(); def resolver := pr["resolver"]; pr["promise"]), true)
+  >   resolver.resolve(false)
+  >   jsRef.call(remote, "foo", []) }
+  # problem: Error: Resolution promise of a proxy handled by [object Object] didn't resolve to a 1-element array, but false.
+
+Resolution identity conflict
+
+  ? { def remote := makeProxy(stubHandler, (def pr := jsRef.promise(); def resolver := pr["resolver"]; pr["promise"]), true)
+  >   resolver.resolve([false])
+  >   jsRef.call(remote, "foo", []) }
+  # problem: Error: Attempt to resolve a Far ref handled by [object Object] to another identity (false).
+
+--- optSealedDispatch
+
+  ? [jsRef.optSealedDispatch(remote, exampleBrand)]
+  # value: [<JS undefined>]
+  
+  ? [jsRef.optSealedDispatch(makeProxy(farHandler, jsRef.promise()["promise"], true), exampleBrand)]
+  # stdout: handleOptSealedDispatch <exampleBrand>
+  #         
+  
+  # value: [<brandResult>]
+
+  ? [jsRef.optSealedDispatch(makeProxy(farHandler, jsRef.promise()["promise"], false), exampleBrand)]
+  # stdout: handleOptSealedDispatch <exampleBrand>
+  #         
+  
+  # value: [<brandResult>]
+
+XXX resolution to near/other-promise targets
