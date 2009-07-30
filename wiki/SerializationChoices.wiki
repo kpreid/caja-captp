@@ -5,4 +5,6 @@
   * those of the Cajita `___.sharedImports` object, and
   * `DataE_JS1_builtinsMaker` which is [http://code.google.com/p/caja-captp/source/browse/trunk/test/call-uncall.updoc the builtinsMaker object from the Data-E module]. The "1" is a version number for compatibility in the event that its protocol is incompatibly changed.
 
-The env used by CapTP is the `defaultEnv` plus the [http://wiki.erights.org/wiki/CapTP#Data-E_configuration CapTP-specific exits].
+The env used by CapTP is the `defaultEnv` plus the [http://wiki.erights.org/wiki/CapTP#Data-E_configuration CapTP-specific exits], and:
+
+  * `CapTP_JS1_Swiss`: The SwissNumber/Base/Hash wrapper constructor. I don't know whether this will be replaced by some better scheme for types.
