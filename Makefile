@@ -16,6 +16,7 @@ tests: \
    test/proxy.live.xhtml \
    test/call-uncall.live.xhtml \
    test/captp-objects.live.xhtml \
+   test/captp-trace.live.xhtml \
    test/datae.live.xhtml \
    test/SwissTable.live.xhtml
 
@@ -27,6 +28,7 @@ test: all
 src/everything.out.js: \
    src/_header.js \
    src/authorizer.js \
+   src/util.out.js \
    src/sha1.out.js \
    src/ref.out.js \
    src/uncallers.out.js \

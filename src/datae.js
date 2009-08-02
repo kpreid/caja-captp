@@ -209,9 +209,59 @@ var deSubgraphKit = (function () {
   }); // end deSubgraphKit
 })();
 
+// Kit for JavaScript source text. Very incomplete; used only for debugging.
+var deJavaScriptKit = (function () {
+  return cajita.freeze({
+
+    toString: function () { return "deJavaScriptKit"; },
+
+    makeBuilder: function () { 
+      var temps = [];
+      var nextTemp = 0;
+      return {
+        toString: function () { return "[deJavaScriptKit builder]"; },
+        
+        buildRoot: function (node) {
+          return node;
+        },
+        
+        buildLiteral: function (value) {
+          switch (typeof(value)) {
+            case "string": return "\"" + value.replace(new RegExp("[\\\"]", "g"), "\\$&") + "\"";
+            default: return "" + value;
+          }
+        },
+        
+        buildImport: function (noun) { return noun; },
+
+        // XXX handle non-dot verbs.
+        buildCall: function (rec, verb, args) {
+          if (rec === "builtinsMaker" && verb === "frozenArray") { // prettiness kludge
+            return "cajita.freeze([" + args.join(", ") + "])";
+          } else {
+            return rec + "." + verb + "(" + args.join(", ") + ")";
+          }
+        },
+        
+        // XXX declare temps
+        buildDefine: function (definition) {
+          temps[nextTemp] = definition;
+          return [definition, nextTemp++];
+        },
+        
+        buildIbid: function (tempIndex) {
+          return temps[tempIndex];
+        }
+        
+      }; // end builder
+    }
+    
+  }); // end deJavaScriptKit
+})();
 
 // exports
 ({
+  "deJavaScriptKit": deJavaScriptKit,
   "deJSONTreeKit": deJSONTreeKit,
   "deSubgraphKit": deSubgraphKit
 });

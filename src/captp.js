@@ -58,6 +58,19 @@ Swiss.enforce = function (value) {
   return new Swiss(value.bits);
 };
 
+// Produce a data structure describing the structure of CapTP messages.
+function makeMessageTable(typeMap) {
+  return cajita.freeze([
+    cajita.freeze(["DeliverOnly",  [typeMap.IncomingPos, typeMap.MsgName, typeMap.Obj]]),
+    cajita.freeze(["Deliver",      [typeMap.AnswerPos, typeMap.Obj, typeMap.IncomingPos, typeMap.MsgName, typeMap.Obj]]),
+    cajita.freeze(["GCExport",     [typeMap.ExportPos, typeMap.WireDelta]]),
+    cajita.freeze(["GCAnswer",     [typeMap.AnswerPos]]),
+    cajita.freeze(["Shutdown",     [typeMap.MsgCount]])
+    //cajita.freeze(["Terminated", [typeMap.Obj]]),
+    //cajita.freeze(["Wormhole",   [typeMap.Data, typeMap.VatID, typeMap.VatID]])
+  ]);
+}
+
 // The operations-on-promises object. XXX this needs to be split out so that Data-E code can use it.
 var Ref = cajita.freeze({
   resolution: function (obj) { return obj; },
@@ -786,6 +799,88 @@ function CapTPConnection() {
   });
 }
 
+var traceMessages = (function () {
+
+  // This is a Data-E kit used as a value-rather-than-Data-E-protocol intermediate representation; the particular kit used is arbitrary
+  var bufferingKit = deJSONTreeKit;
+
+  function convertDE(f) {
+    var builder = bufferingKit.makeBuilder();
+    var ast = f(builder);
+    function deProvider(builder) {
+      return bufferingKit.recognize(ast, builder);
+    }
+    deProvider.toString = function () {
+      var ancestor = deJavaScriptKit.makeBuilder();
+      var twiddleBuilder = cajita.copy(ancestor);
+      twiddleBuilder.buildCall = function (rec, verb, args) {
+        if (rec === "CapTP_1_descs") {
+          return verb + "Desc(" + args + ")"; // kludge
+        } else {
+          return ancestor.buildCall(rec, verb, args);
+        }
+      };
+      return bufferingKit.recognize(ast, twiddleBuilder);
+    };
+    return deProvider;
+  }
+  
+  function id(x) { return x; }
+  var converterTable = cajita.freeze({
+    IncomingPos: id,
+    AnswerPos: id,
+    ExportPos: id,
+    MsgName: deJavaScriptKit.makeBuilder().buildLiteral,
+    MsgCount: id,
+    WireDelta: id,
+    Obj: convertDE
+  });
+  
+  var messages = makeMessageTable(converterTable);
+
+  var dispatchTable = {};
+  cajita.forOwnKeys(messages, function (i) {
+    var verb = messages[i][0];
+    var argConverters = messages[i][1];
+    dispatchTable[verb] = function (args) {
+      cajita.enforce(args.length === argConverters.length, "Wrong number of arguments for CapTP ", verb, ": ", args.length, " not ", argConverters.length);
+      var result = [];
+      for (var i = 0; i < args.length; i++) {
+        result.push(argConverters[i](args[i]));
+      }
+      return cajita.freeze(result);
+    };
+  });
+  cajita.freeze(dispatchTable);
+
+  function traceMessages(traceCollector, nextCapTPReceiver) {
+
+    var tracer = {
+      toString: function () {
+        return "[tracing CapTP to " + nextCapTPReceiver + "]";
+      }
+    };
+    cajita.forOwnKeys(dispatchTable, function (verb) {
+      var argsConverter = dispatchTable[verb];
+      tracer[verb] = function () {
+        var convArgs = argsConverter(arguments);
+        try {
+          traceCollector(verb + "(" + convArgs.join(", ") + ")");
+        } catch (p) {
+          console.error("traceMessages: problem with collector: ", p);
+        }
+        if (nextCapTPReceiver !== null) {
+          (Ref.isNear(nextCapTPReceiver) ? Ref.call : Ref.sendOnly)(nextCapTPReceiver, verb, convArgs);
+        }
+      };
+    });
+    return cajita.freeze(tracer);
+  }
+  
+  return traceMessages;
+  
+})();
+
 ({
   "CapTPConnection": CapTPConnection,
 
@@ -800,4 +895,6 @@ function CapTPConnection() {
   
   "Swiss": Swiss,
   "SwissTable": SwissTable,
+  
+  "traceMessages": traceMessages
 });
