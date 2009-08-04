@@ -11,18 +11,27 @@ The following code is boilerplate to load a Cajita module with collecting the re
   ? def js := <import:org.erights.eojs.jsTools>; null
 
   ? def cajita := <import:org.erights.eojs.cajita>; null
+  ? def cajitaEnv := <import:org.erights.eojs.cajitaEnv>; null
 
   ? def exports; null
   
   ? def oldNewModuleHandler := cajitaPriv.getNewModuleHandler()
-  > cajitaPriv.setNewModuleHandler(js.asObject([
-  >   "handle" => js.asFunction(fn newModule {
-  >     bind exports := newModule.instantiate(cajitaPriv.get___(), cajita.freeze(oldNewModuleHandler.getImports()))
-  >     #bind exports := newModule.instantiate(cajitaPriv.get___(), oldNewModuleHandler.getImports())
-  >   })
-  > ]))
+  > def loadAndWait(url) {
+  >   def value
+  >   cajitaPriv.setNewModuleHandler(js.asObject([
+  >     "handle" => js.asFunction(fn newModule {
+  >       cajitaPriv.setNewModuleHandler(oldNewModuleHandler)
+  >       bind value := newModule.instantiate(cajitaPriv.get___(), oldNewModuleHandler.getImports())
+  >     })
+  >   ]))
+  >   EoJS.asyncLoad(url)
+  >   interp.waitAtTop(value)
+  >   return value
+  > }
+  > null
   
-  ? EoJS.asyncLoad("../src/everything.out.js")
+  ? def exports := loadAndWait("../src/everything.out.js"); null
+  ? def testutil := loadAndWait("test-util.out.js"); null
   
   ? interp.waitAtTop(exports)
 
@@ -133,14 +142,8 @@ Ref
  
   ? jsRef.resolution(def p := jsRef.promise()["promise"]) == p
   # value: true
- 
- broken
-  
-  ? jsRef.broken("bang")
-  # value: [Broken: Error: bang]
-  
-  ? jsRef.broken(js.undefined())
-  # problem: Error: May not use undefined as an error
+
+See broken reference section below for Ref.broken.
 
  isNear
 
@@ -344,7 +347,25 @@ Bugfix test: promise ref not propagating opt-problem correctly
   ? jsRef.optProblem(p)
   # value: Error: boink
 
-Broken reference details
+
+-------------------------------------------------------------------------------
+Broken references
+
+Ref.broken
+ 
+ ? jsRef.broken("bang")
+ # value: [Broken: Error: bang]
+ 
+ ? jsRef.broken(js.undefined())
+ # problem: Error: May not use undefined as an error
+
+Cajita produces 'tame exception' objects, which do not currently have useful toString, when an exception is caught. Therefore, ensure that the broken ref prints them usefully.
+
+  ? def te := testutil.throwAndCatch(cajita.construct(cajitaEnv["Error"], ["boo"]))
+  > jsRef.broken(te)
+  # value: [Broken: Error: boo]
+
+Details
   XXX this updoc script is ordering-fragile
 
   ? def printingReactor := js.asFunction(fn obj { print(obj) }); null
