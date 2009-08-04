@@ -7,11 +7,12 @@ RUNE = rune -Dfile.encoding=utf-8 -cpa eojs/lib-host -cpa eojs/tagsoup.jar
 all: lib tests
 
 clean:
-	rm -f src/*.out.js test/*.live.xhtml
+	rm -f {src,test}/*.out.{js,html} test/*.live.xhtml
 
 lib: src/everything.out.js
 
 tests: \
+   test/test-util.out.js \
    test/ref.live.xhtml \
    test/proxy.live.xhtml \
    test/call-uncall.live.xhtml \
@@ -44,8 +45,8 @@ src/everything.out.js: \
 
 %.live.xhtml: %.updoc.html
 	@# XXX hardcoded base only works for files in one subdir
-	$(RUNE) eojs/updoc-animate.e --base '../eojs/serve/' "$^" > "$@" || rm "$@"
+	$(RUNE) eojs/updoc-animate.e --base '../eojs/serve/' "$<" > "$@"
 
 %.live.xhtml: %.updoc
 	@# XXX hardcoded base only works for files in one subdir
-	$(RUNE) eojs/updoc-animate.e --base '../eojs/serve/' --script '../caja/ant-lib/com/google/caja/plugin/html-sanitizer-minified.js' --script '../caja/ant-lib/com/google/caja/plugin/domita-minified.js' "$^" > "$@" || rm "$@"
+	$(RUNE) eojs/updoc-animate.e --base '../eojs/serve/' --script '../caja/ant-lib/com/google/caja/plugin/html-sanitizer-minified.js' --script '../caja/ant-lib/com/google/caja/plugin/domita-minified.js' "$<" > "$@"

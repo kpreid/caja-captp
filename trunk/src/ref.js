@@ -99,7 +99,15 @@ var Ref = cajita.freeze({
       isResolved: function () { return true; },
       optProblem: function () { return problem; },
       optSealedDispatch: function (brand) { return undefined; },
-      refToString: function () { return "[Broken: " + problem + "]"; },
+      refToString: function () {
+        var s = "" + problem;
+        if (s == "[object Object]" && cajita.hasOwnPropertyOf(problem, "name")
+                                   && cajita.hasOwnPropertyOf(problem, "message")) {
+          // try interpreting it as a Cajita tamed exception
+          s = problem.name + ": " + problem.message;
+        }
+        return "[Broken: " + s + "]";
+      },
       send: function (verb, args) {
         console.log("SEND BROKEN: " + ref + " <- " + verb + " (" + args + ")");
         if (verb === WhenMoreResolvedMessage && args.length == 1) {
