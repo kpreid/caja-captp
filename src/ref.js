@@ -421,6 +421,16 @@ var Ref = cajita.freeze({
     }
     safeWhenResolvedReactor.toString = function () { return "[SafeWhenResolvedReactor]"; };
     safeWhenResolvedReactor(null);
+  },
+
+  sameEver: function (a, b) {
+    console.warn("Stub sameness being used between ", a, " and ", b);
+    return identical(a, b);
+  },
+
+  sameYet: function (a, b) {
+    console.warn("Stub sameness being used between ", a, " and ", b);
+    return identical(a, b);
   }
 });
 
