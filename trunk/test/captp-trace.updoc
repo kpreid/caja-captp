@@ -61,10 +61,10 @@ Utility for producing traces of CapTP communication.
   >     b.buildRoot(b.buildCall(
   >       b.buildImport("builtinsMaker"),
   >       "frozenArray",
-  >       [b.buildLiteral("bar"),
+  >       [b.buildAtom("bar"),
   >        b.buildCall(b.buildImport("CapTP_1_descs"),
   >                    "Incoming",
-  >                    [b.buildLiteral(2)] )]))})))
+  >                    [b.buildAtom(2)] )]))})))
   # stdout: DeliverOnly(0, "foo", cajita.freeze(["bar", IncomingDesc(2)]))
   #         
   

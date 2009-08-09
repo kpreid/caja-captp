@@ -4,6 +4,10 @@
 
 // This performs the same algorithm as deASTKit from E-on-Java, with only difference in the output.
 var deJSONTreeKit = (function () {
+  function jsonAtomType(x) {
+    return typeof(x) === "string" || typeof(x) === "number";
+  }
+  
   return cajita.freeze({
     toString: function () { return "deJSONTreeKit"; },
     makeBuilder: function () {
@@ -16,15 +20,14 @@ var deJSONTreeKit = (function () {
           return node;
         },
         
-        buildLiteral: function (literal) {
-          var t = typeof(literal);
-          if (t === "string") {
-            return literal;
-          } else if (t === "number") {
-            // XXX review whether we would like to support explicit ints
-            return cajita.freeze(["float64", literal]);
+        atomType: function () { return jsonAtomType; },
+        
+        buildAtom: function (atom) {
+          var t = typeof(atom);
+          if (t === "string" || t === "number") {
+            return atom;
           } else {
-            throw new Error("deJSONTreeKit: This is not a literal: " + literal);
+            throw new Error("deJSONTreeKit: This is not an atom: " + atom);
           }
         },
 
@@ -71,10 +74,6 @@ var deJSONTreeKit = (function () {
       var tempMap = {};
       
       var handlers = {
-        recog_float64: function (tag, lit) { 
-          cajita.enforceType(lit, "number");
-          return builder.buildLiteral(lit);
-        },
         recog_import: function (tag, name) { 
           return builder.buildImport(name);
         },
@@ -102,8 +101,8 @@ var deJSONTreeKit = (function () {
       };
       
       var subRecog = function (jsonValue) {
-        if (typeof(jsonValue) == "string") {
-          return builder.buildLiteral(jsonValue);
+        if (typeof(jsonValue) === "string" || typeof(jsonValue) === "number") {
+          return builder.buildAtom(jsonValue);
         } else if (typeof(jsonValue) == "object") {
           // assuming it's an array
           return handlers["recog_" + jsonValue[0]].apply(cajita.USELESS, jsonValue);
@@ -119,6 +118,10 @@ var deJSONTreeKit = (function () {
 })();
 
 var deSubgraphKit = (function () {
+  function subgraphAtomType(x) {
+    return true;
+  }
+  
   return cajita.freeze({
 
     toString: function () { return "deSubgraphKit"; },
@@ -134,7 +137,8 @@ var deSubgraphKit = (function () {
           return node;
         },
         
-        buildLiteral: function (value) { return value; },
+        atomType: function () { return subgraphAtomType; },
+        buildAtom: function (value) { return value; },
         
         buildImport: function (noun) { 
           if (noun in env) {
@@ -165,6 +169,8 @@ var deSubgraphKit = (function () {
         recognize: function (specimen, builder) {
           cajita.enforceType(builder, "object", "deSubgraphKit.recognize's builder");
           
+          var atomType = builder.atomType();
+          
           // subRecog is the recursive processor of a single object being serialized.
           var subRecog = function (obj) {
             // There are four possible results from serializing an object, indicated below
@@ -176,9 +182,9 @@ var deSubgraphKit = (function () {
               // XXX using undefined here because that's what a cajita.newTable() returns for misses -- should we do otherwise, eg using null? -- kpreid 2009-05-31
               //cajita.enforceType(unenvLookup, "string") // not yet tested
               return builder.buildImport(unenvLookup);
-            } else if (typeof(obj) == "string" || typeof(obj) == "number") {
-              // 2. The object is a literal.
-              return builder.buildLiteral(obj);
+            } else if (atomType(obj)) {
+              // 2. The object is an atom.
+              return builder.buildAtom(obj);
             } else {
               // XXX implement
               // 3. The object is composite (gets uncalled).
@@ -225,7 +231,7 @@ var deJavaScriptKit = (function () {
           return node;
         },
         
-        buildLiteral: function (value) {
+        buildAtom: function (value) {
           switch (typeof(value)) {
             case "string": return "\"" + value.replace(new RegExp("[\\\"]", "g"), "\\$&") + "\"";
             default: return "" + value;

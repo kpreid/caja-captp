@@ -813,7 +813,7 @@ var traceMessages = (function () {
     IncomingPos: id,
     AnswerPos: id,
     ExportPos: id,
-    MsgName: deJavaScriptKit.makeBuilder().buildLiteral,
+    MsgName: deJavaScriptKit.makeBuilder().buildAtom,
     MsgCount: id,
     WireDelta: id,
     Obj: convertDE
