@@ -44,22 +44,22 @@ function getRefImpl(ref) {
       // Unlike E implementations, since we cannot implement transparent Refs, we print a prefix so that JS programmers debugging can tell the difference that JS programs may care about anyway.
       refToString: function () { return "[Ref to " + ref + "]"; },
       send: function (verb, args) {
-        console.log("SEND near: " + ref + " <- " + verb + " (" + args + ") QUEUEING");
+        console.log("SEND near: ", ref, " <- ", verb, " (", args, ") QUEUEING");
         var pr = Ref.promise();
         var r = pr.resolver;
         setTimeout(function () { 
-          console.log("SEND near: " + ref + " <- " + verb + " (" + args + ") DELIVERING");
+          console.log("SEND near: ", ref, " <- ", verb, " (", args, ") DELIVERING");
           try {
             r.resolve(Ref.call(ref, verb, args));
           } catch (ex) {
-            console.log("SEND caught: " + ref + " <- " + verb + " (" + args + ") caught " + ex);
+            console.ccCaughtError("SEND caught: ", ref, " <- ", verb, " (", args, ") caught ", ex);
             if (shouldCatchToBroken(ex)) {
               r.smash(ex);
             } else {
               throw ex;
             }
           }
-          console.log("SEND near: " + ref + " <- " + verb + " (" + args + ") DELIVERED");
+          console.log("SEND near: ", ref, " <- ", verb, " (", args, ") DELIVERED");
         }, 0);
         return pr.promise;
       },
@@ -109,7 +109,7 @@ var Ref = cajita.freeze({
         return "[Broken: " + s + "]";
       },
       send: function (verb, args) {
-        console.log("SEND BROKEN: " + ref + " <- " + verb + " (" + args + ")");
+        console.log("SEND BROKEN: ", ref, " <- ", verb, " (", args, ")");
         if (verb === WhenMoreResolvedMessage && args.length == 1) {
           Ref.sendOnly(args[0], "call", [cajita.USELESS, ref]);
         } else if (verb === WhenBrokenMessage && args.length == 1) {
@@ -140,13 +140,13 @@ var Ref = cajita.freeze({
       // XXX do a full type check. isArray doesn't check for non-array behavior. But this is moot unless and until we get sameness.
       resolutionBox = Ref.fulfillment(resolutionBox);
       if (!cajita.isArray(resolutionBox) || resolutionBox.length !== 1) {
-        console.log("Unbox fail:" + resolutionBox);
+        console.error("Unbox fail: ", resolutionBox);
         resolutionBox = cajita.freeze([Ref.broken(new Error("Resolution promise of a proxy handled by " + handler + " didn't resolve to a 1-element array, but " + resolutionBox + "."))]);
         return unbox();
       }
       var res = resolutionBox[0];
       if (isFar && !Ref.isBroken(res)) {
-        console.log("" + resolutionBox + "  --  " + res + "  " + isFar + Ref.isBroken(res));
+        console.log("", resolutionBox, "  --  ", res, "  ", isFar, Ref.isBroken(res));
         // XXX incomplete: once we have sameness, we need to resolve to a disconnected ref, and fail if the broken ref provided is disconnected rather than unconnected.
         resolutionBox = cajita.freeze([Ref.broken(new Error("Attempt to resolve a Far ref handled by " + handler + " to another identity (" + res + ")."))]);
         return unbox();
@@ -162,10 +162,11 @@ var Ref = cajita.freeze({
         return Ref.isResolved(resolutionBox) ? getRefImpl(unbox()).refToString() : isFar ? "[Far ref]" : "[Promise]";
       },
       send: function (verb, args) {
-        console.log("SEND proxy: " + ref + " <- " + verb + " (" + args + ") " + (Ref.isResolved(resolutionBox) ? "FORWARDING" : "PROXYING"));
+        console.log("SEND proxy: ", ref, " <- ", verb, " (", args, ") ", (Ref.isResolved(resolutionBox) ? "FORWARDING" : "PROXYING"));
         return Ref.isResolved(resolutionBox) ? getRefImpl(unbox()).send(verb, args) : Ref.send(handler, "handleSend", cajita.freeze([verb, args]));
       },
       sendOnly: function (verb, args) {
+        console.log("SEND ONLY proxy: ", ref, " <- ", verb, " (", args, ") ", (Ref.isResolved(resolutionBox) ? "FORWARDING" : "PROXYING"));
         Ref.isResolved(resolutionBox) ? getRefImpl(unbox()).sendOnly(verb, args) : Ref.sendOnly(handler, "handleSendOnly", cajita.freeze([verb, args]));
       },
       shorten: function () { return Ref.isResolved(resolutionBox) ? getRefImpl(unbox()).shorten() : ref; },
@@ -192,7 +193,7 @@ var Ref = cajita.freeze({
         if (resolved) {
           return getRefImpl(resolution).send(verb, args);
         } else {
-          console.log("SEND promise: " + promise + " <- " + verb + " (" + args + ") BUFFERING");
+          console.log("SEND promise: ", promise, " <- ", verb, " (", args, ") BUFFERING");
           var resultRP = Ref.promise();
           buffer.push({resolver: resultRP.resolver, verb: verb, args: args});
           return resultRP.promise;
@@ -202,7 +203,7 @@ var Ref = cajita.freeze({
         if (resolved) {
           return getRefImpl(resolution).sendOnly(verb, args);
         } else {
-          console.log("SEND ONLY promise: " + promise + " <- " + verb + " (" + args + ") BUFFERING");
+          console.log("SEND ONLY promise: ", promise, " <- ", verb, " (", args, ") BUFFERING");
           buffer.push({resolver: null, verb: verb, args: args});
         }
       },
@@ -240,10 +241,10 @@ var Ref = cajita.freeze({
           for (var i = 0; i < buffer.length; i++) {
             var queued = buffer[i];
             if (queued.resolver == null) {
-              console.log("PROMISE DELIVERING only: " + resolution + " <- " + queued.verb + "(" + queued.args + ")");
+              console.log("PROMISE DELIVERING only: ", resolution, " <- ", queued.verb, "(", queued.args, ")");
               Ref.send(resolution, queued.verb, queued.args);
             } else {
-              console.log("PROMISE DELIVERING: " + resolution + " <- " + queued.verb + "(" + queued.args + ")");
+              console.log("PROMISE DELIVERING: ", resolution, " <- ", queued.verb, "(", queued.args, ")");
               queued.resolver.resolve(Ref.send(resolution, queued.verb, queued.args));
             }
           }
@@ -340,7 +341,7 @@ var Ref = cajita.freeze({
     if (Ref.isNear(ref)) {
       if (verb === WhenMoreResolvedMessage) {
         var reactor = args[0];
-        console.log("Ref.call whenMoreResolved reacting (" + ref + ") -> " + reactor);
+        console.log("Ref.call whenMoreResolved reacting (", ref, ") -> ", reactor);
         Ref.sendOnly(reactor, "call", [cajita.USELESS, ref]);
       } else if (verb === WhenBrokenMessage) {
         // do nothing
@@ -380,9 +381,9 @@ var Ref = cajita.freeze({
   /** http://wiki.erights.org/wiki/Object_Ref#whenResolved.2F2 */
   whenResolved: function (ref, reactor) {
     var resultPR = Ref.promise();
-    console.log("CC whenResolved " + ref + " " + reactor);
+    console.log("CC whenResolved ", ref, " ", reactor);
     function safeWhenResolvedReactor(unusedRefArg) {
-      console.log("CC whenResolved callback " + ref + " " + reactor);
+      console.log("CC whenResolved callback ", ref, " ", reactor);
       ref = Ref.resolution(ref);
       if (Ref.isResolved(ref)) {
         console.log("CC whenResolved now resolved");
@@ -402,10 +403,10 @@ var Ref = cajita.freeze({
 
   /** http://wiki.erights.org/wiki/Object_Ref#whenResolvedOnly.2F2 */
   whenResolvedOnly: function (ref, reactor) {
-    console.log("CC whenResolvedOnly " + ref + " " + reactor);
+    console.log("CC whenResolvedOnly ", ref, " ", reactor);
     var live = true;
     function safeWhenResolvedReactor(unusedRefArg) {
-      console.log("CC whenResolvedOnly " + ref + " " + reactor);
+      console.log("CC whenResolvedOnly ", ref, " ", reactor);
       ref = Ref.resolution(ref);
       if (Ref.isResolved(ref)) {
         console.log("CC whenResolved now resolved");
