@@ -1,6 +1,9 @@
 # Copyright 2009 Kevin Reid, under the terms of the MIT X license
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
+  ? pragma.syntax("0.9")
+  > pragma.enable("accumulator")
+
 This file tests the Caja-CapTP implementation of Data-E serialization, which includes deJSONTreeKit, deSubgraphKit, and makeSurgeon.
 
 -------------------------------------------------------------------------------
@@ -40,31 +43,39 @@ XXX to review: Should we wrap our values in a {} so that they match the JSON 'ob
   ? def b := deJSONTreeKit.makeBuilder()
   # value: <deJSONTreeKit builder>
 
---- Literals.
+--- Atoms.
+
+  ? def Atom := deJSONTreeKit.makeBuilder().atomType()
+  # value: <JS func jsonAtomType>
+  
+  ? accum [] for x in ["a", 1, 1.2, -1.2, js.asObject([].asMap())] { _.with(Atom(x)) }
+  # value: [true, true, true, true, false]
   
   ? def b := deJSONTreeKit.makeBuilder()
-  > b.buildRoot(b.buildLiteral("abcd"))
+  > b.buildRoot(b.buildAtom("abcd"))
   # value: "abcd"
   
   ? def b := deJSONTreeKit.makeBuilder()
-  > b.buildRoot(b.buildLiteral(11234))
-  # value: ["float64", 11234]
+  > b.buildRoot(b.buildAtom(11234))
+  # value: 11234
 
-XXX review (format/interop): Do we want to support ints distinctly?
+XXX review (format/interop): Do we want to support ints distinctly in the notation, even if we can't generate them distinctly? Probably yes if we get a BigInteger class.
   
   ? def b := deJSONTreeKit.makeBuilder()
-  > b.buildRoot(b.buildLiteral(11234.5))
-  # value: ["float64", 11234.5]
+  > b.buildRoot(b.buildAtom(11234.5))
+  # value: 11234.5
   
-  No tests for characters since they are irrelevant to the JavaScript applicability right now. XXX review (format/interop): mismatch between JS and Data-E literal types -- interop vs. nativeness.
+  ? def b := deJSONTreeKit.makeBuilder()
+  > b.buildRoot(b.buildAtom(-11234.5))
+  # value: -11234.5
+  
+XXX review (format/interop): In traditional Data-E negative numbers are represented as negation operations, but JS has no negate method, so we permit them in atoms.
 
-XXX review (format/interop): What to do about negative numbers? In Data-E they are represented as negation operations, but JS has no negate method. For now we permit them in literals.
-
-Bogus literal:
+Bogus atom:
 
   ? def b := deJSONTreeKit.makeBuilder()
-  > b.buildRoot(b.buildLiteral(js.asObject([].asMap())))
-  # problem: Error: deJSONTreeKit: This is not a literal: [object Object]
+  > b.buildRoot(b.buildAtom(js.asObject([].asMap())))
+  # problem: Error: deJSONTreeKit: This is not an atom: [object Object]
 
 
 --- Import.
@@ -82,7 +93,7 @@ Bogus literal:
 --- Define and ibid.
 
   ? def b := deJSONTreeKit.makeBuilder()
-  > b.buildRoot(b.buildCall(def [t,id] := b.buildDefine(b.buildLiteral("Lorem")); t,
+  > b.buildRoot(b.buildCall(def [t,id] := b.buildDefine(b.buildAtom("Lorem")); t,
   >                         "add",
   >                         [b.buildIbid(id)]))
   # value: ["call", ["define", 0, "Lorem"], "add", [["ibid", 0]]]
@@ -90,10 +101,10 @@ Bogus literal:
 Test that define increments a counter.
 
   ? def b := deJSONTreeKit.makeBuilder()
-  > b.buildRoot(b.buildCall(def [t1,_] := b.buildDefine(b.buildLiteral("Lorem")); t1,
+  > b.buildRoot(b.buildCall(def [t1,_] := b.buildDefine(b.buildAtom("Lorem")); t1,
   >                         "add",
-  >                         [def [t2,id] := b.buildDefine(b.buildLiteral("ipsum")); t2,
-  >                          def [t3,_] := b.buildDefine(b.buildLiteral("dolor")); t3,
+  >                         [def [t2,id] := b.buildDefine(b.buildAtom("ipsum")); t2,
+  >                          def [t3,_] := b.buildDefine(b.buildAtom("dolor")); t3,
   >                          b.buildIbid(id)]))
   # value: ["call", ["define", 0, "Lorem"], "add", [["define", 1, "ipsum"], ["define", 2, "dolor"], ["ibid", 1]]]
 
@@ -121,14 +132,20 @@ Testing the builder of deSubgraphKit.
   ? def b := deSubgraphKit.makeBuilder(env)
   # value: <deSubgraphKit builder>
 
---- Literals
+--- Atoms
 
+  ? def Atom := deSubgraphKit.makeBuilder().atomType()
+  # value: <JS func subgraphAtomType>
+  
+  ? accum [] for x in ["a", 1, 1.2, -1.2, js.asObject([].asMap())] { _.with(Atom(x)) }
+  # value: [true, true, true, true, true]
+    
   ? def b := deSubgraphKit.makeBuilder(env)
-  > b.buildRoot(b.buildLiteral(43))
+  > b.buildRoot(b.buildAtom(43))
   # value: 43
   
   ? def b := deSubgraphKit.makeBuilder(env)
-  > b.buildRoot(b.buildLiteral("Lorem"))
+  > b.buildRoot(b.buildAtom("Lorem"))
   # value: "Lorem"
 
 XXX if we introduce a big-integer type test it here
@@ -148,7 +165,7 @@ XXX if we introduce a big-integer type test it here
 The argument nodes are arbitrary, just to show that they are passed through.
 
   ? def b := deSubgraphKit.makeBuilder(env)
-  > b.buildRoot(b.buildCall(b.buildImport("makeArray"), "call", ["bogus", b.buildImport("x"), b.buildLiteral("aardwolf")]))
+  > b.buildRoot(b.buildCall(b.buildImport("makeArray"), "call", ["bogus", b.buildImport("x"), b.buildAtom("aardwolf")]))
   # value: ["aardvarks", "aardwolf"]
 
 --- Define
@@ -156,9 +173,9 @@ The argument nodes are arbitrary, just to show that they are passed through.
   ? def b := deSubgraphKit.makeBuilder(env)
   > b.buildRoot(b.buildCall(b.buildImport("makeArray"), "call",
   >                         [null,
-  >                          def [t1,_] := b.buildDefine(b.buildLiteral("Lorem")); t1,
-  >                          def [t2,id] := b.buildDefine(b.buildLiteral("ipsum")); t2,
-  >                          def [t3,_] := b.buildDefine(b.buildLiteral("dolor")); t3,
+  >                          def [t1,_] := b.buildDefine(b.buildAtom("Lorem")); t1,
+  >                          def [t2,id] := b.buildDefine(b.buildAtom("ipsum")); t2,
+  >                          def [t3,_] := b.buildDefine(b.buildAtom("dolor")); t3,
   >                          b.buildIbid(id)]))
   # value: ["Lorem", "ipsum", "dolor", "ipsum"]
 
@@ -170,9 +187,16 @@ Defrec is not supported yet because we haven't decided what to do about circular
 
 Given that the builders for each kit have been tested independently, we now test the recognizers by connecting them to the builders. 
 
+Utility.
+  ? def makeAtomNotingBuilder() {
+  >   def builder := cajita.copy(deJSONTreeKit.makeBuilder())
+  >   builder["buildAtom"] := js.asFunction(fn atom { ["atom", atom] })
+  >   return cajita.freeze(builder)
+  > }; null
+
 deSubgraphKit recognizer. First, some test infrastructure...
 
-  ? def uncallExample {}  # this needs to be not-a-literal
+  ? def uncallExample {}  # this needs to be not-an-atom
   > 
   > def failingUncaller := js.asObject([
   >   "optUncall" => js.asFunction(def _(obj) {
@@ -207,18 +231,20 @@ There are four cases when an object is serialized; they are considered in this o
   ? r.recognize("aardvarks", deJSONTreeKit.makeBuilder())
   # value: ["import", "x"]
 
-2. It is a literal: builder.buildLiteral is used.
+2. It is an atom: builder.buildAtom is used.
 
-  ? r.recognize(1, deJSONTreeKit.makeBuilder())
-  # value: ["float64", 1]
+  ? r.recognize(1, makeAtomNotingBuilder())
+  # value: ["atom", 1]
 
-  ? r.recognize("foo", deJSONTreeKit.makeBuilder())
-  # value: "foo"
+  ? r.recognize("foo", makeAtomNotingBuilder())
+  # value: ["atom", "foo"]
+
+XXX test that this uses the builder's atom type test
 
 3. It is a composite object; each uncaller is applied to it in order, and the first success is passed to builder.buildCall. (The recipient and arguments here are chosen to exercise that they are in fact recursively processed.)
 
   ? r.recognize(uncallExample, deJSONTreeKit.makeBuilder())
-  # value: ["call", ["float64", 1], "run", [["import", "x"], ["float64", 32.5]]]
+  # value: ["call", 1, "run", [["import", "x"], 32.5]]
 
 4. It is not serializable; an error is produced.
 
@@ -245,24 +271,22 @@ We will use deSubgraphKit builders to test the output, as well as deJSONTreeKit 
 
 The recognizer object is deJSONTreeKit itself, because no parameters are needed. 
 
---- Literals.
+--- Atoms.
 
-Float literal.
+Number atom.
 
-  ? deJSONTreeKit.recognize(["float64", 2.213119], mb())
+  ? deJSONTreeKit.recognize(2.213119, mb())
   # value: 2.213119
 
-Checking the builder wasn't forgotten:
+Checking that invoking the builder wasn't forgotten:
 
-  ? deJSONTreeKit.recognize(["float64", 2.213119], deJSONTreeKit.makeBuilder())
-  # value: ["float64", 2.213119]
-
-String literal.
-
-  ? deJSONTreeKit.recognize("x", mb())
-  # value: "x"
+  ? deJSONTreeKit.recognize(2.213119, makeAtomNotingBuilder())
+  # value: ["atom", 2.213119]
   
-XXX test the builder was actually invoked here.
+String atom.
+
+  ? deJSONTreeKit.recognize("x", makeAtomNotingBuilder())
+  # value: ["atom", "x"]
   
 --- Import.
 
@@ -285,15 +309,15 @@ Getting complicated: we'll test roundtrip as well
   
 --- Define and ibid.
 
-  ? deJSONTreeKit.recognize(["call", ["import", "callable"], "call", [["define", 0, ["float64", 99]], ["ibid", 0], ["ibid", 0]]], deJSONTreeKit.makeBuilder())
-  # value: ["call", ["import", "callable"], "call", [["define", 0, ["float64", 99]], ["ibid", 0], ["ibid", 0]]]
+  ? deJSONTreeKit.recognize(["call", ["import", "callable"], "call", [["define", 0, 99], ["ibid", 0], ["ibid", 0]]], deJSONTreeKit.makeBuilder())
+  # value: ["call", ["import", "callable"], "call", [["define", 0, 99], ["ibid", 0], ["ibid", 0]]]
   
-  ? deJSONTreeKit.recognize(["call", ["import", "callable"], "call", [["define", 0, ["float64", 99]], ["ibid", 0], ["ibid", 0]]], mb())
+  ? deJSONTreeKit.recognize(["call", ["import", "callable"], "call", [["define", 0, 99], ["ibid", 0], ["ibid", 0]]], mb())
   # value: 198
 
 A recognizer must not assume that the input's temporary indexes are the same as the output's. This constitutes a test:
 
-  ? deJSONTreeKit.recognize(["call", ["import", "callable"], "call", [["define", 7, ["float64", 99]], ["ibid", 7], ["ibid", 7]]], mb())
+  ? deJSONTreeKit.recognize(["call", ["import", "callable"], "call", [["define", 7, 99], ["ibid", 7], ["ibid", 7]]], mb())
   # value: 198
 
 XXX Review the Safe Serialization paper about what the constraints on temporary indexes are.
