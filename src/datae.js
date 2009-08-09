@@ -2,6 +2,14 @@
 // Copyright 2009 Kevin Reid, under the terms of the MIT X license
 // found at http://www.opensource.org/licenses/mit-license.html ...............
 
+function mapF(func, array) {
+  var out = [];
+  for (var i = 0; i < array.length; i++) {
+    out[i] = func(array[i]);
+  }
+  return cajita.freeze(out);
+}
+
 // This performs the same algorithm as deASTKit from E-on-Java, with only difference in the output.
 var deJSONTreeKit = (function () {
   function jsonAtomType(x) {
@@ -12,12 +20,33 @@ var deJSONTreeKit = (function () {
     toString: function () { return "deJSONTreeKit"; },
     makeBuilder: function () {
       var nextTemp = 0;
+      var varReused = [];
       return cajita.freeze({
         toString: function () { return "<deJSONTreeKit builder>"; },
         
         buildRoot: function (node) {
           nextTemp = null; // help discourage accidental reuse
-          return node;
+          
+          function simplify(x) {
+            var tag = cajita.isArray(x) ? x[0] : "atom";
+            switch (tag) {
+              case "atom": 
+              case "ibid":
+              case "import":
+                return x;
+              case "define":
+                if (!varReused[x[1]]) return simplify(x[2]);
+                // fallthrough
+              case "defrec":
+                return cajita.freeze([tag, x[1], simplify(x[2])]);
+              case "call":
+                return cajita.freeze(["call", simplify(x[1]), x[2], mapF(simplify, x[3])]);
+              default:
+                throw new Error("deJSONTreeKit: Unrecognized tag in simplifier: " + tag);
+            }
+          }
+          
+          return simplify(node);
         },
         
         atomType: function () { return jsonAtomType; },
@@ -37,6 +66,8 @@ var deJSONTreeKit = (function () {
         
         buildIbid: function (index) {
           // XXX range check
+          varReused[index] = true;
+          console.log("ibid ", index);
           return cajita.freeze(["ibid", index]);
         },
         
@@ -47,22 +78,29 @@ var deJSONTreeKit = (function () {
         buildPromise: function () {
           var promiseIndex = nextTemp;
           nextTemp += 2;
-          //varReused
+          console.log("promise ", promiseIndex, " ", promiseIndex + 1);
+          varReused[promiseIndex] = false;
+          varReused[promiseIndex + 1] = false;
           return promiseIndex;
         },
         
         buildDefine: function (rValue) {
           var tempIndex = nextTemp++;
-          //varReused[tempIndex] = false; // XXX implement the deASTKit functionality this corresponds to
+          varReused[tempIndex] = false;
           var defExpr = cajita.freeze(["define", tempIndex, rValue]);
           return cajita.freeze([defExpr, tempIndex]);
         },
         
         buildDefrec: function (resolverIndex, rValue) {
           var promiseIndex = resolverIndex - 1;
-          var defExpr = cajita.freeze(["defrec", promiseIndex, rValue]);
-          return defExpr;
-        },
+          
+          // If the variable has been mentioned (by an ibid) *before* defrec (as opposed to after) then the defrec does in fact define a cycle and cannot be simplified to a define.
+          console.log("defrec ", promiseIndex, " ", varReused[promiseIndex]);
+          if (varReused[promiseIndex])
+            return cajita.freeze(["defrec", promiseIndex, rValue]);
+          else
+            return cajita.freeze(["define", promiseIndex, rValue]);
+        }
         
       }); // end builder
     },
@@ -76,6 +114,9 @@ var deJSONTreeKit = (function () {
       var handlers = {
         recog_import: function (tag, name) { 
           return builder.buildImport(name);
+        },
+        recog_ibid: function (tag, inputTempIndex) {
+          return builder.buildIbid(tempMap[inputTempIndex]);
         },
         recog_call: function (tag, rec, verb, argsIn) {
           var argsBuilt = [];
@@ -95,9 +136,12 @@ var deJSONTreeKit = (function () {
           tempMap[inputTempIndex] = builtTempIndex;
           return result;
         },
-        recog_ibid: function (tag, inputTempIndex) {
-          return builder.buildIbid(tempMap[inputTempIndex]);
-        },
+        recog_defrec: function (tag, promiseIndex, rValue) {
+          var builtPromiseIndex = builder.buildPromise();
+          tempMap[promiseIndex] = builtPromiseIndex;
+          tempMap[promiseIndex+1] = builtPromiseIndex+1;
+          return builder.buildDefrec(builtPromiseIndex+1, subRecog(rValue));
+        }
       };
       
       var subRecog = function (jsonValue) {
@@ -105,14 +149,18 @@ var deJSONTreeKit = (function () {
           return builder.buildAtom(jsonValue);
         } else if (typeof(jsonValue) == "object") {
           // assuming it's an array
-          return handlers["recog_" + jsonValue[0]].apply(cajita.USELESS, jsonValue);
+          var handler = handlers["recog_" + jsonValue[0]];
+          if (handler)
+            return handler.apply(cajita.USELESS, jsonValue);
+          else
+            throw new Error("deJSONTreeKit: Unrecognized tag '"+ jsonValue[0] + "' in input: " + jsonValue);
         } else {
           // XXX test for handling this case
         }
       };
       
       return builder.buildRoot(subRecog(specimen));
-    },
+    }
 
   }); // end deJSONTreeKit
 })();
@@ -148,15 +196,27 @@ var deSubgraphKit = (function () {
           }
         },
 
+        buildIbid: function (tempIndex) {
+          return temps[tempIndex];
+        },
+        
         buildCall: function (rec, verb, args) { return rec[verb].apply(rec, args); },
         
         buildDefine: function (definition) {
-          temps[nextTemp] = definition;
-          return [definition, nextTemp++];
+          temps[nextTemp++] = definition;
+          return [definition, nextTemp - 1];
         },
         
-        buildIbid: function (tempIndex) {
-          return temps[tempIndex];
+        buildPromise: function () {
+          var pr = Ref.promise();
+          temps[nextTemp++] = pr.promise;
+          temps[nextTemp++] = pr.resolver;
+          return nextTemp - 2;
+        },
+        
+        buildDefrec: function (resolverIndex, definition) {
+          temps[resolverIndex].resolve(definition);
+          return definition;
         }
         
       }; // end builder
@@ -171,46 +231,63 @@ var deSubgraphKit = (function () {
           
           var atomType = builder.atomType();
           
+          var seen = cajita.newTable(false);
+          
           // subRecog is the recursive processor of a single object being serialized.
           var subRecog = function (obj) {
-            // There are four possible results from serializing an object, indicated below
+            obj = Ref.resolution(obj);
+            
+            // There are several possible results from serializing an object, indicated below:
             
             var unenvLookup = unenv.get(obj);
+            var seenLookup = seen.get(obj);
             if (unenvLookup !== undefined) {
-              // 1. The object is an exit.
+              // *** The object is an exit.
               
               // XXX using undefined here because that's what a cajita.newTable() returns for misses -- should we do otherwise, eg using null? -- kpreid 2009-05-31
               //cajita.enforceType(unenvLookup, "string") // not yet tested
               return builder.buildImport(unenvLookup);
-            } else if (atomType(obj)) {
-              // 2. The object is an atom.
-              return builder.buildAtom(obj);
+            } else if (seenLookup !== undefined) {
+              // *** The object has been seen before.
+              return builder.buildIbid(seenLookup);
             } else {
-              // XXX implement
-              // 3. The object is composite (gets uncalled).
-              for (var i = 0; i < uncallers.length; i++) {
-                // An uncaller returns either a 3-tuple or null.
-                var optPortrayal = uncallers[i].optUncall(obj);
-                if (optPortrayal !== null) {
-                  var recipBuilt = subRecog(optPortrayal[0]);
-                  var argsObjs = optPortrayal[2];
-                  var argsBuilt = [];
-                  for (var j = 0; j < argsObjs.length; j++) {
-                    argsBuilt[j] = subRecog(argsObjs[j]);
+              // *** The object has not been seen before; we must record it for potential cycles or reoccurrences.
+              var promIndex = builder.buildPromise();
+              seen.set(obj, promIndex);
+              
+              var node; // Will hold the Data-E portrayal of the object
+              if (atomType(obj)) {
+                // *** The object is an atom.
+                node = builder.buildAtom(obj);
+              } else {
+                // *** The object is composite (gets uncalled).
+                for (var i = 0; i < uncallers.length; i++) {
+                  // An uncaller returns either a 3-tuple or null.
+                  var optPortrayal = uncallers[i].optUncall(obj);
+                  if (optPortrayal !== null) {
+                    var recipBuilt = subRecog(optPortrayal[0]);
+                    var argsObjs = optPortrayal[2];
+                    var argsBuilt = [];
+                    for (var j = 0; j < argsObjs.length; j++) {
+                      argsBuilt[j] = subRecog(argsObjs[j]);
+                    }
+                    node = builder.buildCall(recipBuilt, optPortrayal[1], cajita.freeze(argsBuilt));
+                    break;
                   }
-                  return builder.buildCall(recipBuilt, optPortrayal[1], cajita.freeze(argsBuilt));
                 }
-              }
 
-              // 4. The object is not serializable.
-              throw new Error("deSubgraphKit: can't uneval: " + obj);
+                // *** The object is not serializable.
+                if (!node) throw new Error("deSubgraphKit: can't uneval: " + obj);
+              }
+              // At this point, 'node' has been filled in with the representation of the object.
+              return builder.buildDefrec(promIndex + 1, node);
             }
           }; // end subRecog
           
           return builder.buildRoot(subRecog(specimen));
-        },
+        }
       }); // end recognizer
-    },
+    }
     
   }); // end deSubgraphKit
 })();
