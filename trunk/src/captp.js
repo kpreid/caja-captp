@@ -850,7 +850,7 @@ var traceMessages = (function () {
         try {
           traceCollector(verb + "(" + convArgs.join(", ") + ")");
         } catch (p) {
-          console.error("traceMessages: problem with collector: ", p);
+          console.ccCaughtError("traceMessages: problem with collector: ", p);
         }
         if (nextCapTPReceiver !== null) {
           (Ref.isNear(nextCapTPReceiver) ? Ref.call : Ref.sendOnly)(nextCapTPReceiver, verb, convArgs);
