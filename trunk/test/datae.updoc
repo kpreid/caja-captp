@@ -28,6 +28,9 @@ The following code is boilerplate to load a Cajita module with collecting the re
 
 -------------------------------------------------------------------------------
 
+  ? def jsRef := exports["Ref"]
+  # value: [Caja-CapTP Ref]
+  
   ? def deJSONTreeKit := exports["deJSONTreeKit"]
   # value: deJSONTreeKit
   
@@ -98,7 +101,7 @@ Bogus atom:
   >                         [b.buildIbid(id)]))
   # value: ["call", ["define", 0, "Lorem"], "add", [["ibid", 0]]]
 
-Test that define increments a counter.
+Test that define increments a counter. (Also demonstrates that unused defines are eliminated.)
 
   ? def b := deJSONTreeKit.makeBuilder()
   > b.buildRoot(b.buildCall(def [t1,_] := b.buildDefine(b.buildAtom("Lorem")); t1,
@@ -106,7 +109,7 @@ Test that define increments a counter.
   >                         [def [t2,id] := b.buildDefine(b.buildAtom("ipsum")); t2,
   >                          def [t3,_] := b.buildDefine(b.buildAtom("dolor")); t3,
   >                          b.buildIbid(id)]))
-  # value: ["call", ["define", 0, "Lorem"], "add", [["define", 1, "ipsum"], ["define", 2, "dolor"], ["ibid", 1]]]
+  # value: ["call", "Lorem", "add", [["define", 1, "ipsum"], "dolor", ["ibid", 1]]]
 
 --- Defrec.
 
@@ -181,7 +184,11 @@ The argument nodes are arbitrary, just to show that they are passed through.
 
 --- Defrec
 
-Defrec is not supported yet because we haven't decided what to do about circular structure yet.
+  ? def b := deSubgraphKit.makeBuilder(env)
+  > b.buildRoot(def p := b.buildPromise()
+  >             b.buildDefrec(p+1, b.buildCall(b.buildImport("makeArray"), "call",
+  >                                            [null, "Lorem", "ipsum", b.buildIbid(p)])))
+  # value: ["Lorem", "ipsum", [Ref to Lorem,ipsum,[Ref to ]]]
 
 -------------------------------------------------------------------------------
 
@@ -209,6 +216,8 @@ deSubgraphKit recognizer. First, some test infrastructure...
   >       return [1, "run", ["aardvarks", 32.5]]
   >     } else if (obj == "aardvarks") {
   >       return ["FAIL", "run", ["shouldn't get my hands on an exit"]]
+  >     } else if (cajita.isArray(obj)) {
+  >       return [0, "array", cajita.snapshot(obj)]
   >     } else {
   >       return js.null()
   >     }
@@ -251,9 +260,36 @@ XXX test that this uses the builder's atom type test
   ? r.recognize(def randomObj {}, deJSONTreeKit.makeBuilder())
   # problem: Error: deSubgraphKit: can't uneval: <E object randomObj>
 
+Also, shared and circular structure must be reconstructed.
+
+(Just for testing purposes, the uncaller given above uncalls an array as [0, "list", [...elems...]]. This is just arranged to be minimal, and not a practical system.)
+
+  ? r.recognize([uncallExample, uncallExample], deJSONTreeKit.makeBuilder())
+  # value: ["call", 0, "array", [["define", 4, ["call", 1, "run", [["import", "x"], 32.5]]], ["ibid", 4]]]
+
+That was a test of shared structure; now, circular structure. First, we construct a circular structure which does *not* contain any Refs.
+
+  ? def a := js.array("a", js.array("b"))
+  > a[1][1] := a
+  > a
+  # value: (JS array)["a", (JS array)["b", <***CYCLE***>]]
+
+  ? r.recognize(a, deJSONTreeKit.makeBuilder())
+  # value: ["defrec", 0, ["call", ["define", 2, 0], "array", ["a", ["call", ["ibid", 2], "array", ["b", ["ibid", 0]]]]]]
+
+Now, the same circular structure defined with Caja-CapTP refs. (E [] literals are Cajita-frozen arrays.)
+
+  ? def pr := jsRef.promise()
+  > pr["resolver"].resolve(def a := ["a", ["b", pr["promise"]]])
+  > a
+  # value: ["a", ["b", [Ref to a,b,[Ref to ]]]]
+  (The above is mixed-up because of using both E-style and JS-style printing)
+  
+  ? r.recognize(a, deJSONTreeKit.makeBuilder())
+  # value: ["defrec", 0, ["call", ["define", 2, 0], "array", ["a", ["call", ["ibid", 2], "array", ["b", ["ibid", 0]]]]]]
+
 -------------------------------------------------------------------------------
 
-XXX Implement structure sharing/circularity handling in deSubgraphKit recognizer
 XXX Review the E deSubgraphKit and deASTKit for cases that we don't handle
 
 -------------------------------------------------------------------------------
@@ -266,6 +302,7 @@ We will use deSubgraphKit builders to test the output, as well as deJSONTreeKit 
   >   return deSubgraphKit.makeBuilder(js.asObject([
   >     "x" => "aardvarks",
   >     "callable" => def callable := js.asFunction(fn a,b { a + b }),
+  >     "array" => js.asFunction(__makeList),
   >   ]))
   > }; null
 
@@ -324,4 +361,10 @@ XXX Review the Safe Serialization paper about what the constraints on temporary 
 
 --- Defrec.
 
-XXX Defrec is not yet supported because deSubgraphKit doesn't build defrecs.
+  ? deJSONTreeKit.recognize(["defrec", 0, ["call", ["import", "array"], "call", [-1, "a", ["ibid", 0]]]], mb())
+  # value: ["a", [Ref to a,[Ref to ]]]
+
+--- Invalid input
+
+  ? deJSONTreeKit.recognize(["aardvarks", 0])
+  # problem: Error: deJSONTreeKit: Unrecognized tag 'aardvarks' in input: aardvarks,0
