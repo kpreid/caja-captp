@@ -28,16 +28,25 @@ function Swiss(value) {
     
     bits: value,
 
+    equals: function (other) {
+      return value === Swiss.enforce(other).bits;
+    },
+
     showBits: function () {
       return binb2hex(str2binb(value));
     },
     
     toString: function () {
       return "[Swiss number]";
+    },
+    
+    CapTP__optUncall: function () {
+      return portrayCall(Swiss, [value]);
     }
   });
 }
 Swiss.enforce = function (value) {
+  // XXX This is unlike other 'enforce' in that it is not an assertion; fix and review usage
   return new Swiss(value.bits);
 };
 

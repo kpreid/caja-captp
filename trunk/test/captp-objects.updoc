@@ -52,3 +52,39 @@ This is a placeholder. We *should* have tests for the operation of each of these
 
   ? exports["LocatorUnum"]("fake-id", def swissTable {}, def capTPMgr {})
   # value: <locatorUnum>
+
+Caja-CapTP swiss number wrappers.
+
+  ? def Swiss := exports["Swiss"]
+  # value: <JS func Swiss>
+  
+  ? def s11 := Swiss("\u0001" * 18 + "\u0012\u0034")
+  # value: [Swiss number]
+  
+  ? def s12 := Swiss("\u0001" * 18 + "\u0012\u0034")
+  > def s2 := Swiss("\u0001" * 18 + "\u0089\u0073")
+  # value: [Swiss number]
+  
+  ? s11["bits"]
+  # value: "\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u00124"
+  
+  ? s11.hash()
+  # value: [Swiss number]
+  
+  ? s11.hash()["bits"]
+  # value: "Q}zA\u0014\u00ae\u00c6\u0097l\u00a0\u00ed1\u00fc\u0091\u0089e\u00fc\u00f1\u00f7\u0001"
+  
+  ? s11.equals(s12)
+  # value: true
+  
+  ? s11.equals(s2)
+  # value: false
+  
+  ? s11.showBits()
+  # value: "0101010101010101010101010101010101011234"
+
+  ? s11.hash().showBits()
+  # value: "517d7a4114aec6976ca0ed31fc918965fcf1f701"
+  
+  ? s11.CapTP__optUncall()
+  # value: [<JS func Swiss>, "call", [USELESS, "\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u00124"]]

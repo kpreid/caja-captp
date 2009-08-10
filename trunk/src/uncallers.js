@@ -2,6 +2,11 @@
 // Copyright 2009 Kevin Reid, under the terms of the MIT X license
 // found at http://www.opensource.org/licenses/mit-license.html ...............
 
+// utility: Generate an uncall corresponding to a JS function call.
+function portrayCall(func, args) {
+  return cajita.freeze([func, "call", cajita.freeze([cajita.USELESS].concat(args))]);
+}
+
 var builtinsMaker = cajita.freeze({
   toString: function () { return "builtinsMaker"; },
 
@@ -130,5 +135,6 @@ cajita.freeze({
   CycleBreaker: CycleBreaker,
   defaultEnv: defaultEnv,
   defaultUnenv: defaultUnenv,
+  portrayCall: portrayCall,
   recordUncaller: recordUncaller
 });
