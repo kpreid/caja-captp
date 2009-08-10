@@ -206,7 +206,8 @@ function binb2b64(binarray)
   return str;
 }
 
-({
+// exports
+cajita.freeze({
   hex_sha1     : hex_sha1     ,
   b64_sha1     : b64_sha1     ,
   str_sha1     : str_sha1     ,

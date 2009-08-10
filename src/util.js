@@ -34,6 +34,6 @@ function once(func) {
 
 // exports
 cajita.freeze({
-  "identical": identical,
-  "once": once
+  identical: identical,
+  once: once
 });

@@ -435,6 +435,7 @@ var Ref = cajita.freeze({
   }
 });
 
+// exports
 cajita.freeze({
-  "Ref": Ref
+  Ref: Ref
 });
