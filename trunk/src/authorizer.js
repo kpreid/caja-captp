@@ -65,9 +65,10 @@
       });
     }
     
+    // exports
     return cajita.freeze({
-      PRIV_scheduling: scheduling,
       console: tameConsole,
+      PRIV_scheduling: scheduling,
     });
 
   }});

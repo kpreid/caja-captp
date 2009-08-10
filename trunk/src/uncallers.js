@@ -16,7 +16,7 @@ var builtinsMaker = cajita.freeze({
       record[arguments[i]] = arguments[i+1];
     }
     return cajita.freeze(record);
-  },
+  }
 });
 
 // Return an uncall which invokes a constructor with 'new'
@@ -39,7 +39,7 @@ var builtinsUncaller = cajita.freeze({
     }
     
     return null;
-  },
+  }
 });
 
 var recordUncaller = cajita.freeze({
@@ -55,7 +55,7 @@ var recordUncaller = cajita.freeze({
     } else {
       return null;
     }
-  },
+  }
 });
 
 // XXX We should extract this from the Cajita sharedImports, but that is not available from cajoled code.
@@ -124,11 +124,11 @@ defaultUnenv.toString = function () { return "[Data-E defaultUnenv]"; };
 cajita.freeze(defaultUnenv);
 
 // exports
-({
-  "builtinsUncaller": builtinsUncaller,
-  "builtinsMaker": builtinsMaker,
-  "recordUncaller": recordUncaller,
-  "CycleBreaker": CycleBreaker,
-  "defaultEnv": defaultEnv,
-  "defaultUnenv": defaultUnenv,
+cajita.freeze({
+  builtinsMaker: builtinsMaker,
+  builtinsUncaller: builtinsUncaller,
+  CycleBreaker: CycleBreaker,
+  defaultEnv: defaultEnv,
+  defaultUnenv: defaultUnenv,
+  recordUncaller: recordUncaller
 });

@@ -343,8 +343,8 @@ var deJavaScriptKit = (function () {
 })();
 
 // exports
-({
-  "deJavaScriptKit": deJavaScriptKit,
-  "deJSONTreeKit": deJSONTreeKit,
-  "deSubgraphKit": deSubgraphKit
+cajita.freeze({
+  deJavaScriptKit: deJavaScriptKit,
+  deJSONTreeKit: deJSONTreeKit,
+  deSubgraphKit: deSubgraphKit
 });

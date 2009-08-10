@@ -65,7 +65,7 @@ var Ref = cajita.freeze({
   
   // XXX Once we have promises this will become more complicated
   sameYet: identical,
-  sameEver: identical,
+  sameEver: identical
 });
 
 function makeWeakKeyMap() { 
@@ -864,20 +864,21 @@ var traceMessages = (function () {
   
 })();
 
-({
-  "CapTPConnection": CapTPConnection,
+// exports
+cajita.freeze({
+  CapTPConnection: CapTPConnection,
 
   // exported only for testing
-  "AnswersTable": AnswersTable,
-  "ExportsTable": ExportsTable,
-  "ProxiesTable": ProxiesTable,
-  "NearGiftTable": NearGiftTable,
-  "PromiseGiftTable": PromiseGiftTable,
-  "NonceLocator": NonceLocator,
-  "LocatorUnum": LocatorUnum,
+  AnswersTable: AnswersTable,
+  ExportsTable: ExportsTable,
+  LocatorUnum: LocatorUnum,
+  NearGiftTable: NearGiftTable,
+  NonceLocator: NonceLocator,
+  PromiseGiftTable: PromiseGiftTable,
+  ProxiesTable: ProxiesTable,
   
-  "Swiss": Swiss,
-  "SwissTable": SwissTable,
+  Swiss: Swiss,
+  SwissTable: SwissTable,
   
-  "traceMessages": traceMessages
+  traceMessages: traceMessages
 });
