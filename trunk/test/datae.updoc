@@ -255,10 +255,10 @@ XXX test that this uses the builder's atom type test
   ? r.recognize(uncallExample, deJSONTreeKit.makeBuilder())
   # value: ["call", 1, "run", [["import", "x"], 32.5]]
 
-4. It is not serializable; an error is produced.
+4. It is not serializable; an error is produced. (Information on the specific object goes to the console.)
 
   ? r.recognize(def randomObj {}, deJSONTreeKit.makeBuilder())
-  # problem: Error: deSubgraphKit: can't uneval: <E object randomObj>
+  # problem: Error: deSubgraphKit: can't uneval object
 
 Also, shared and circular structure must be reconstructed.
 

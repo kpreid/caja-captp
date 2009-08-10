@@ -234,7 +234,8 @@ var deSubgraphKit = (function () {
           var seen = cajita.newTable(false);
           
           // subRecog is the recursive processor of a single object being serialized.
-          var subRecog = function (obj) {
+          var subRecog = function (obj, stack) {
+            var nstack = stack.concat([obj]); // for debug tracing
             obj = Ref.resolution(obj);
             
             // There are several possible results from serializing an object, indicated below:
@@ -264,12 +265,16 @@ var deSubgraphKit = (function () {
                 for (var i = 0; i < uncallers.length; i++) {
                   // An uncaller returns either a 3-tuple or null.
                   var optPortrayal = uncallers[i].optUncall(obj);
+                  if (optPortrayal === undefined) {
+                    console.error("", uncallers[i], " returned undefined (not null) for object ", obj, "."); // don't throw secrets
+                    throw new Error("An uncaller returned undefined (not null).");
+                  }
                   if (optPortrayal !== null) {
-                    var recipBuilt = subRecog(optPortrayal[0]);
+                    var recipBuilt = subRecog(optPortrayal[0], nstack);
                     var argsObjs = optPortrayal[2];
                     var argsBuilt = [];
                     for (var j = 0; j < argsObjs.length; j++) {
-                      argsBuilt[j] = subRecog(argsObjs[j]);
+                      argsBuilt[j] = subRecog(argsObjs[j], nstack);
                     }
                     node = builder.buildCall(recipBuilt, optPortrayal[1], cajita.freeze(argsBuilt));
                     break;
@@ -277,14 +282,23 @@ var deSubgraphKit = (function () {
                 }
 
                 // *** The object is not serializable.
-                if (!node) throw new Error("deSubgraphKit: can't uneval: " + obj);
+                if (!node) {
+                  var report = ["deSubgraphKit: can't uneval ", obj];
+                  for (var i = stack.length - 1; i >= 0; i--) {
+                    report.push("\n  ...in portrayal of "); report.push(stack[i]);
+                  }
+                  report.push("\n...which is the root.");
+                  console.error.apply(console, report);
+                  throw new Error("deSubgraphKit: can't uneval object"); // don't throw secrets
+                }
               }
+
               // At this point, 'node' has been filled in with the representation of the object.
               return builder.buildDefrec(promIndex + 1, node);
             }
           }; // end subRecog
           
-          return builder.buildRoot(subRecog(specimen));
+          return builder.buildRoot(subRecog(specimen, []));
         }
       }); // end recognizer
     }
