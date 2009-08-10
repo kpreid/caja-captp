@@ -2,9 +2,14 @@
 // Copyright 2009 Kevin Reid, under the terms of the MIT X license
 // found at http://www.opensource.org/licenses/mit-license.html ...............
 
-// utility: Generate an uncall corresponding to a JS function call.
+// Return a portrayal which invokes a JS function.
 function portrayCall(func, args) {
   return cajita.freeze([func, "call", cajita.freeze([cajita.USELESS].concat(args))]);
+}
+
+// Return a portrayal which invokes a constructor with 'new'.
+function portrayConstruct(constructor, args) {
+  return cajita.freeze([cajita, "construct", cajita.freeze([constructor, cajita.freeze(args)])]);
 }
 
 var builtinsMaker = cajita.freeze({
@@ -24,11 +29,6 @@ var builtinsMaker = cajita.freeze({
   }
 });
 
-// Return an uncall which invokes a constructor with 'new'
-function constructorUncall(constructor, args) {
-  return cajita.freeze([cajita, "construct", cajita.freeze([constructor, cajita.freeze(args)])]);
-}
-
 var builtinsUncaller = cajita.freeze({
   toString: function () { return "builtinsUncaller"; },
   optUncall: function (specimen) {
@@ -40,7 +40,7 @@ var builtinsUncaller = cajita.freeze({
     
     if (cajita.isDirectInstanceOf(specimen, Error)) {
       // XXX review that we are not checking for frozenness.
-      return constructorUncall(Error, [specimen.message]);
+      return portrayConstruct(Error, [specimen.message]);
     }
     
     return null;
@@ -136,5 +136,6 @@ cajita.freeze({
   defaultEnv: defaultEnv,
   defaultUnenv: defaultUnenv,
   portrayCall: portrayCall,
+  portrayConstruct: portrayConstruct,
   recordUncaller: recordUncaller
 });
