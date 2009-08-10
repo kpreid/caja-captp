@@ -67,7 +67,6 @@ var deJSONTreeKit = (function () {
         buildIbid: function (index) {
           // XXX range check
           varReused[index] = true;
-          console.log("ibid ", index);
           return cajita.freeze(["ibid", index]);
         },
         
@@ -78,7 +77,6 @@ var deJSONTreeKit = (function () {
         buildPromise: function () {
           var promiseIndex = nextTemp;
           nextTemp += 2;
-          console.log("promise ", promiseIndex, " ", promiseIndex + 1);
           varReused[promiseIndex] = false;
           varReused[promiseIndex + 1] = false;
           return promiseIndex;
@@ -95,7 +93,6 @@ var deJSONTreeKit = (function () {
           var promiseIndex = resolverIndex - 1;
           
           // If the variable has been mentioned (by an ibid) *before* defrec (as opposed to after) then the defrec does in fact define a cycle and cannot be simplified to a define.
-          console.log("defrec ", promiseIndex, " ", varReused[promiseIndex]);
           if (varReused[promiseIndex])
             return cajita.freeze(["defrec", promiseIndex, rValue]);
           else
