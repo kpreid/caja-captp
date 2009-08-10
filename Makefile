@@ -35,6 +35,7 @@ src/everything.out.js: \
    src/uncallers.out.js \
    src/datae.out.js \
    src/captp.out.js \
+   src/captp-NonceLocator.out.js \
    src/_footer.js
 	cat $^ > "$@"
 

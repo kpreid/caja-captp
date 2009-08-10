@@ -44,11 +44,11 @@ This is a placeholder. We *should* have tests for the operation of each of these
   # value: <promiseGiftTable>
 
   ? exports["NonceLocator"](def pgt {},
-  >                             def ngt {},
-  >                             "fake-id",
-  >                             def capTPMgr {},
-  >                             def swissTable {})
-  # value: <nonceLocator>
+  >                         def ngt {},
+  >                         "fake-id",
+  >                         def capTPMgr {},
+  >                         def swissTable {})
+  # value: [NonceLocator for vat fake-id]
 
   ? exports["LocatorUnum"]("fake-id", def swissTable {}, def capTPMgr {})
   # value: <locatorUnum>

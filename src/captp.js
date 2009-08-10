@@ -15,6 +15,7 @@ var entropy = cajita.freeze({
   }
 });
 
+var VatID = cajita.freeze({ enforce: function (v) { cajita.enforceType(v, "string"); } });
 
 // In E implementations SwissNumbers are long integers. JavaScript does not have long integers. So we use strings of character codes <256 denoting octets instead.
 // This wrapper provides the operations on it and also ensures that the bits are not leaked in an exception etc. by toString.
@@ -755,13 +756,6 @@ function PromiseGiftTable() {
   });
 }
 
-function NonceLocator() {
-  /// XXX fill out
-  return cajita.freeze({
-    toString: function () { return '<nonceLocator>'; }
-  });
-}
-
 function LocatorUnum() {
   /// XXX fill out
   return cajita.freeze({
@@ -868,12 +862,12 @@ cajita.freeze({
   ExportsTable: ExportsTable,
   LocatorUnum: LocatorUnum,
   NearGiftTable: NearGiftTable,
-  NonceLocator: NonceLocator,
   PromiseGiftTable: PromiseGiftTable,
   ProxiesTable: ProxiesTable,
+  SwissTable: SwissTable,
   
   Swiss: Swiss,
-  SwissTable: SwissTable,
+  VatID: VatID,
   
   traceMessages: traceMessages
 });
