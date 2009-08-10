@@ -54,20 +54,6 @@ function makeMessageTable(typeMap) {
   ]);
 }
 
-// The operations-on-promises object. XXX this needs to be split out so that Data-E code can use it.
-var Ref = cajita.freeze({
-  resolution: function (obj) { return obj; },
-  
-  // Is this object one such that the sameEver predicate gives the same answers as the identical predicate?
-  isSelfish: function () {
-    return true;
-  },
-  
-  // XXX Once we have promises this will become more complicated
-  sameYet: identical,
-  sameEver: identical
-});
-
 function makeWeakKeyMap() { 
   return cajita.newTable(true); 
 };
