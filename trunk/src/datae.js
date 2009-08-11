@@ -163,6 +163,7 @@ var deJSONTreeKit = (function () {
 })();
 
 var deSubgraphKit = (function () {
+
   function subgraphAtomType(x) {
     return true;
   }
@@ -170,6 +171,11 @@ var deSubgraphKit = (function () {
   return cajita.freeze({
 
     toString: function () { return "deSubgraphKit"; },
+    
+    // The uncallers and unenv makeRecognizer uses by default.
+    getDefaultEnv: function () { return defaultEnv; },
+    getDefaultUnenv: function () { return defaultUnenv; },
+    getDefaultUncallers: function () { return defaultUncallers; },
 
     // XXX review: Given magic property names, it safe to use JS properties with no prefix/suffix as the env?
     makeBuilder: function (env) { 
@@ -220,6 +226,12 @@ var deSubgraphKit = (function () {
     },
     
     makeRecognizer: function (uncallers, unenv) {
+      if (uncallers === undefined) {
+        uncallers = defaultUncallers;
+      }
+      if (unenv === undefined) {
+        unenv = defaultUnenv;
+      }
       return cajita.freeze({
         toString: function () { return "<deSubgraphKit recognizer>"; },
         
