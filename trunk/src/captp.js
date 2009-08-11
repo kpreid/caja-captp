@@ -101,7 +101,7 @@ var CommTableMixin = (function () {
    * AnswersTable adds almost nothing to CommTable, you can unit test CommTable
    * by testing AnswersTable.
    *
-   * @author Mark S. Miller
+   * @author Kevin Reid, after Mark S. Miller's Java code from E-on-Java
    */
   var CommTableMixin = function (self) { // stuffs methods into the object self
       /**
@@ -438,7 +438,7 @@ var CommTableMixin = (function () {
  * SwissNumbers to references, not vice versa, so each registration assigns a
  * new SwissNumber.
  *
- * @author Mark S. Miller
+ * @author Kevin Reid, after Mark S. Miller's Java code from E-on-Java
  */
 function SwissTable() {
   // The code within this block is derived, by way of the E-on-CL CapTP 
