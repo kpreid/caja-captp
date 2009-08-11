@@ -12,6 +12,11 @@ function portrayConstruct(constructor, args) {
   return cajita.freeze([cajita, "construct", cajita.freeze([constructor, cajita.freeze(args)])]);
 }
 
+// Return a portrayal which reads a property.
+function portrayRead(obj, name) {
+  return cajita.freeze([cajita, "readPub", cajita.freeze([obj, name])]);
+}
+
 var builtinsMaker = cajita.freeze({
   toString: function () { return "builtinsMaker"; },
 
@@ -29,6 +34,8 @@ var builtinsMaker = cajita.freeze({
   }
 });
 
+// Uncalls everything in the ECMAScript standard that it is appropriate to, as well as special references and Cajita objects.
+// XXX This needs to be put on a firm foundation; right now it's a collection of stuff-that-was-found-necessary.
 var builtinsUncaller = cajita.freeze({
   toString: function () { return "builtinsUncaller"; },
   optUncall: function (specimen) {
@@ -41,12 +48,22 @@ var builtinsUncaller = cajita.freeze({
     if (cajita.isDirectInstanceOf(specimen, Error)) {
       // XXX review that we are not checking for frozenness.
       return portrayConstruct(Error, [specimen.message]);
+      // XXX handle Error subtypes.
+    }
+    
+    if (Ref.isBroken(specimen)) {
+      return cajita.freeze([Ref, "broken", [Ref.optProblem(specimen)]]);
+    }
+    
+    if (specimen === cajita.USELESS) {
+      return portrayRead(cajita, "USELESS");
     }
     
     return null;
   }
 });
 
+// Uncalls arbitrary records. This is often not what you want since they may be objects with opaque functions in them; for this reason it is not included in the default uncaller list. Use it if you want to serialize e.g. JSON-style structures conveniently.
 var recordUncaller = cajita.freeze({
   toString: function () { return "recordUncaller"; },
   optUncall: function (specimen) {
@@ -60,6 +77,17 @@ var recordUncaller = cajita.freeze({
     } else {
       return null;
     }
+  }
+});
+
+// Uncalls objects with uncall methods.
+var selfUncaller = cajita.freeze({
+  toString: function () { return "minimalUncaller"; },
+  optUncall: function (specimen) {
+    if (typeof(specimen) == "object" && specimen !== null && "CapTP__optUncall" in specimen) {
+      return specimen.CapTP__optUncall();
+    }
+    return null;
   }
 });
 
@@ -103,18 +131,42 @@ var sharedImports = cajita.freeze({
 });
 
 // --- CycleBreaker
-var CycleBreaker = {};
-CycleBreaker.byInverting = function (table) {
+// A CycleBreaker is a map whose keys may be arbitrary objects; particularly, even promises.
+function CycleBreaker() {
+  var frozen = false;
   var backing = cajita.newTable(false);
-  var s = "";
-  cajita.forOwnKeys(table, function (key) {
-    s += key;
-    backing.set(table[key], key);
-  });
-  return cajita.freeze({
+  var keys = [];
+  var cb = cajita.freeze({
     toString: function () { return "[CycleBreaker]"; },
-    get: function (obj) { return backing.get(obj); }
+    get: function (obj) { return backing.get(obj); },
+    set: function (key, value) {
+      cajita.enforce(!frozen, "this CycleBreaker is frozen");
+      keys.push(key);
+      backing.set(key, value);
+    },
+    copy: function () {
+      var d = CycleBreaker();
+      for (var i = 0; i < keys.length; i++) {
+        d.set(keys[i], backing.get(keys[i]));
+      }
+      return d;
+    },
+    freeze: function () {
+      frozen = true;
+      return cb;
+    },
+    snapshot: function () {
+      return cb.copy().freeze();
+    }
   });
+  return cb;
+}
+CycleBreaker.byInverting = function (table) {
+  var cb = CycleBreaker();
+  cajita.forOwnKeys(table, function (key) {
+    cb.set(table[key], key);
+  });
+  return cb.freeze();
 };
 cajita.freeze(CycleBreaker);
 
@@ -128,13 +180,18 @@ var defaultUnenv = cajita.copy(CycleBreaker.byInverting(defaultEnv));
 defaultUnenv.toString = function () { return "[Data-E defaultUnenv]"; };
 cajita.freeze(defaultUnenv);
 
+// --- defaultUncallers definition
+var defaultUncallers = cajita.freeze([selfUncaller, builtinsUncaller]);
+
 // exports
 cajita.freeze({
   builtinsMaker: builtinsMaker,
   builtinsUncaller: builtinsUncaller,
   CycleBreaker: CycleBreaker,
   defaultEnv: defaultEnv,
+  defaultUncallers: defaultUncallers,
   defaultUnenv: defaultUnenv,
+  minimalUncaller: minimalUncaller,
   portrayCall: portrayCall,
   portrayConstruct: portrayConstruct,
   recordUncaller: recordUncaller

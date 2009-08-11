@@ -19,6 +19,7 @@ tests: \
    test/captp-objects.live.xhtml \
    test/captp-trace.live.xhtml \
    test/datae.live.xhtml \
+   test/surgeon.live.xhtml \
    test/SwissTable.live.xhtml
 
 test: all
@@ -34,6 +35,7 @@ src/everything.out.js: \
    src/ref.out.js \
    src/uncallers.out.js \
    src/datae.out.js \
+   src/Surgeon.out.js \
    src/captp.out.js \
    src/captp-NonceLocator.out.js \
    src/_footer.js

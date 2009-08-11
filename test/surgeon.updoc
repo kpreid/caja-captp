@@ -1,0 +1,115 @@
+# Copyright 2009 Kevin Reid, under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+-------------------------------------------------------------------------------
+-- This file is new to Caja-CapTP but should be migrated to all Data-E impls --
+-------------------------------------------------------------------------------
+  
+  ? pragma.syntax("0.9")
+  > def cajita := <import:org.erights.eojs.cajita>
+  > def cajitaEnv := <import:org.erights.eojs.cajitaEnv>
+  > null
+
+-------------------------------------------------------------------------------
+The following code is boilerplate to load a Cajita module with collecting the return value. This code should be folded into some Cajita or EoJS library.
+
+  ? def js := <import:org.erights.eojs.jsTools>; null
+
+  ? def exports; null
+  
+  ? def oldNewModuleHandler := cajitaPriv.getNewModuleHandler()
+  > cajitaPriv.setNewModuleHandler(js.asObject([
+  >   "handle" => js.asFunction(fn newModule {
+  >     cajitaPriv.setNewModuleHandler(oldNewModuleHandler)
+  >     bind exports := newModule.instantiate(cajitaPriv.get___(), oldNewModuleHandler.getImports())
+  >   })
+  > ]))
+  
+  ? EoJS.asyncLoad("../src/everything.out.js")
+  
+  ? interp.waitAtTop(exports)
+
+-------------------------------------------------------------------------------
+
+Brief introduction: The Surgeon, in E-style serialization, is the high-level serialization-and-unserialization tool. It provides a convenient interface to configuring serialization and unserialization in matching ways.
+
+See http://wiki.erights.org/wiki/Surgeon for conceptual and E-oriented specification information. This file will attempt to both give practical examples of surgeon usage and test its implementation in Caja-CapTP.
+
+  ? def capsule {}
+  # value: <capsule>
+  
+  ? def makeSurgeon := exports["Surgeon"]
+  # value: <JS func Surgeon>
+  
+  ? def surgeon := makeSurgeon().copy()
+  # value: [Surgeon]
+
+  ? surgeon.serialize([capsule, 3])
+  # problem: Error: deSubgraphKit: can't uneval object
+
+(The specific object for which serialization failed will be reported in the "console" log in Firebug and compatible systems.)
+
+An arbitrary object cannot be serialized; either there must be an /uncaller/ which breaks it down into a description which can be serialized, or it must be added as an /exit/, meaning it is serialized as the name given to it. Here we give the name "foo".
+
+  ? surgeon.addExit(capsule, "foo")
+  # value: <JS undefined>
+
+  ? surgeon.serialize([capsule, 3])
+  # value: ["call", ["import", "DataE_JS1_builtinsMaker"], "frozenArray", [["import", "foo"], 3]]
+
+This serialized form is a JSON value. (It is not a JSON "object", though.). DataE_JS1_builtinsMaker (another exit) is a component of Caja-CapTP which provides methods to construct (typically Cajita-frozen) instances of standard JavaScript types. (We don't use the Array constructor here because it has different behavior when given one argument, and because its result is not Cajita-frozen.)
+
+(Note for JavaScript programmers: This test file is written in E, and executed in E-on-JavaScript, where array literals are always frozen.)
+
+When the surgeon is given this same JSON value, it reconstructs the original object by performing the specified calls and retrieving the values of the specified exits. Literal strings and numbers are just included unchanged.
+
+  ? surgeon.unserialize(["call", ["import", "DataE_JS1_builtinsMaker"], "frozenArray", [["import", "foo"], 3]])
+  # value: [<capsule>, 3]
+
+On uncallers and optUncall:
+
+  ? def surgeon := makeSurgeon().copy() # starting fresh
+  # value: [Surgeon]
+
+Objects in Data-E which are neither literals ("atoms") nor exits must be described by their components. This description is called a /portrayal/, it is an instruction to perform a specific method call, and the portrayal of an object is determined by /uncalling/ it.
+
+/Uncallers/ are registered with the surgeon. An uncaller examines an object to be serialized and returns a portrayal if they recognize it.
+
+Objects which are written to be serializable, when they are not exits (typically an exit is a "singleton" of some sort) typically provide /optUncall/ methods; the surgeon has a generic uncaller which handles all such objects. For example, here's a simple immutable point type:
+
+  function Point(x, y) {
+    return cajita.freeze({
+      x: x,
+      y: y,
+      CapTP__optUncall: function () { return [Point, "call", [cajita.USELESS, x, y]]; }
+    });
+  }
+
+Note that portrayals always describe method calls, not function calls; so since Point is a function we use the standard JS "call" method, and supply an arbitrary value for the "this".
+
+[Since this test script is written in E and there is no current "runtime evaluate some Cajita code" facility, we must now rewrite this object using E-on-JS's JavaScript bridge facilities. Sorry for the noise.]
+
+  ? var Point := null
+  > Point := js.asFunction(def makePoint(x, y) {
+  >   return js.asObject([
+  >     "x" => x,
+  >     "y" => y,
+  >     "CapTP__optUncall" => js.asFunction(fn { [Point, "call", [cajita["USELESS"], x, y]] })
+  >   ]);
+  > });
+  # value: [E function <makePoint>]
+  
+  ? surgeon.serialize(Point(1, 2))
+  # problem: Error: deSubgraphKit: can't uneval object
+
+This still fails because we haven't told the surgeon how to serialize a Point.
+
+  ? surgeon.addExit(Point, "Point")
+  # value: <JS undefined>
+
+(In a large system, one would not necessarily add exits for every constructor, but rather add a single object which contains all of them; the constructors are themselves uncalled to retrieve them. (XXX mention portrayRead once it exists.))
+  
+  ? surgeon.serialize(Point(1, 2))
+  # value: ["call", ["import", "Point"], "call", [["call", ["import", "cajita"], "readPub", [["import", "cajita"], "USELESS"]], 1, 2]]
+
+(Note that while the first reference to cajita.USELESS is rather verbose, if more than one is found backreferences will be used.)
