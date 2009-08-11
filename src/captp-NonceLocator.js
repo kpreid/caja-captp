@@ -10,7 +10,7 @@
  * 
  * Note that myOwnID is the *remote* vat's ID.
  *
- * @author Mark S. Miller
+ * @author Kevin Reid, after Mark S. Miller's Java code from E-on-Java
  */
 function NonceLocator(myPGifts, myNGifts, myOwnID, myHub, mySwissTable) {
   //PromiseGiftTable.enforce(myPGifts);
