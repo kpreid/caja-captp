@@ -18,9 +18,9 @@
 = Description of files =
 
   * src/: !JavaScript code making up Caja-CapTP.
-    * {{{*.js}}}: Uncajoled !JavaScript code. Do not load in browser.
+    * {{{*.js}}}: Uncajoled !JavaScript code. Do not load.
     * {{{*.out.js}}}: (Built) Cajoled !JavaScript code - intermediate files.
-    * everything.js: (Built) The complete Caja-CapTP module to actually use in your web browser: all code packed into one Caja module.
+    * everything.js: (Built) The complete Caja-CapTP module to actually use with your application: all code packed into one Caja module.
     * {{{_header.js}}} and {{{_footer.js}}}: Support code for the packing trick.
     * authorizer.js: Code included uncajoled in everything.js to construct the authorities Caja-CapTP needs to run: timed callback and network access.
     * captp-!NonceLocator.js: The CapTP [http://wiki.erights.org/wiki/NonceLocator NonceLocator] object.
