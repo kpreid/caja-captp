@@ -194,5 +194,6 @@ cajita.freeze({
   minimalUncaller: minimalUncaller,
   portrayCall: portrayCall,
   portrayConstruct: portrayConstruct,
+  portrayRead: portrayRead,
   recordUncaller: recordUncaller
 });

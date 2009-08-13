@@ -107,7 +107,7 @@ This still fails because we haven't told the surgeon how to serialize a Point.
   ? surgeon.addExit(Point, "Point")
   # value: <JS undefined>
 
-(In a large system, one would not necessarily add exits for every constructor, but rather add a single object which contains all of them; the constructors are themselves uncalled to retrieve them. (XXX mention portrayRead once it exists.))
+(In a large system, one would not necessarily add exits for every constructor, but rather add a single object which contains all of them; the constructors are themselves uncalled to retrieve them. The cajita.USELESS object is a built-in example of this; there is a utility function to generate such uncalls: for example, portrayRead(cajita, "USELESS").)
   
   ? surgeon.serialize(Point(1, 2))
   # value: ["call", ["import", "Point"], "call", [["call", ["import", "cajita"], "readPub", [["import", "cajita"], "USELESS"]], 1, 2]]
