@@ -45,6 +45,7 @@ src/everything.out.js: \
 
 %.out.js: %.js
 	caja/bin/cajole_html --input "$^"
+	rm -f "$*.out.html"
 
 %.live.xhtml: %.updoc.html
 	@# XXX hardcoded base only works for files in one subdir
