@@ -163,3 +163,21 @@ Default unenv: the inverse of the above
   ? defaultUnenv.".get"(true)
   # value: "true"
 
+
+-------------------------------------------------------------------------------
+
+Portrayal utilities.
+
+  ? def portrayCall := exports["portrayCall"]
+  > def portrayConstruct := exports["portrayConstruct"]
+  > def portrayRead := exports["portrayRead"]
+  # value: <JS func portrayRead>
+  
+  ? portrayCall(portrayCall, [1, 2])
+  # value: [<JS func portrayCall>, "call", [USELESS, 1, 2]]
+
+  ? portrayConstruct(exports["Swiss"], ["foo"])
+  # value: [cajita, "construct", [<JS func Swiss>, ["foo"]]]
+
+  ? portrayRead(cajita, "BREAK")
+  # value: [cajita, "readPub", [cajita, "BREAK"]]
