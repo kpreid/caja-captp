@@ -316,7 +316,8 @@ var Ref = cajita.freeze({
     return getRefImpl(ref).state();
   },
   
-  /** http://wiki.erights.org/wiki/Object_Ref#optProblem.2F1 */
+  /** http://wiki.erights.org/wiki/Object_Ref#optProblem.2F1 
+      JavaScript: returns undefined for lookup failure (not null). XXX to be changed. */
   optProblem: function (ref) {
     return getRefImpl(ref).optProblem();
   },
@@ -387,7 +388,8 @@ var Ref = cajita.freeze({
     getRefImpl(ref).sendOnly(verb, args);
   },
   
-  /** http://wiki.erights.org/wiki/Object_Ref#optSealedDispatch.2F2 */
+  /** http://wiki.erights.org/wiki/Object_Ref#optSealedDispatch.2F2
+      JavaScript: returns null for lookup failure (not undefined). */
   optSealedDispatch: function (ref, brand) {
     // XXX review: We don't have Brands as in E, so this interface needs revision...
     return getRefImpl(ref).optSealedDispatch(brand);
