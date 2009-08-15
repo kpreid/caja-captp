@@ -331,7 +331,7 @@ Resolution identity conflict
 --- optSealedDispatch
 
   ? [jsRef.optSealedDispatch(remote, exampleBrand)]
-  # value: [<JS undefined>]
+  # value: [<JS null>]
   
   ? [jsRef.optSealedDispatch(makeProxy(farHandler, jsRef.promise()["promise"], true), exampleBrand)]
   # stdout: handleOptSealedDispatch <exampleBrand>

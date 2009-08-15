@@ -40,7 +40,7 @@ function getRefImpl(ref) {
     return cajita.freeze({
       isResolved: function () { return true; },
       optProblem: function () {},
-      optSealedDispatch: function (brand) { return undefined; },
+      optSealedDispatch: function (brand) { return null; },
       // Unlike E implementations, since we cannot implement transparent Refs, we print a prefix so that JS programmers debugging can tell the difference that JS programs may care about anyway.
       refToString: function () { return "[Ref to " + ref + "]"; },
       send: function (verb, args) {
@@ -98,7 +98,7 @@ var Ref = cajita.freeze({
     var refImpl = {
       isResolved: function () { return true; },
       optProblem: function () { return problem; },
-      optSealedDispatch: function (brand) { return undefined; },
+      optSealedDispatch: function (brand) { return null; },
       refToString: function () {
         var s = "" + problem;
         if (s == "[object Object]" && cajita.hasOwnPropertyOf(problem, "name")
@@ -187,7 +187,7 @@ var Ref = cajita.freeze({
     var refImpl = cajita.freeze({
       isResolved: function () { return resolved ? getRefImpl(resolution).isResolved() : false; },
       optProblem: function () { return resolved ? getRefImpl(resolution).optProblem() : undefined; },
-      optSealedDispatch: function (brand) { return resolved ? getRefImpl(resolution).optSealedDispatch(brand) : undefined; },
+      optSealedDispatch: function (brand) { return resolved ? getRefImpl(resolution).optSealedDispatch(brand) : null; },
       refToString: function () { return resolved ? getRefImpl(resolution).refToString() : "[Promise]"; },
       send: function (verb, args) {
         if (resolved) {

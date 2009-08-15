@@ -277,13 +277,13 @@ See broken reference section below for Ref.broken.
   In Caja-CapTP which is *not* an E implementation, we have skipped the Miranda-method part of __optSealedDispatch and just used it for proxy unsealing.
   
   ? jsRef.optSealedDispatch(def _ {}, 1)
-  # value: <JS undefined>
+  # value: <JS null>
   
   ? jsRef.optSealedDispatch(jsRef.broken("optSealedDispatch test broken"), 1)
-  # value: <JS undefined>
+  # value: <JS null>
   
   ? jsRef.optSealedDispatch(jsRef.promise()["promise"], 1)
-  # value: <JS undefined>
+  # value: <JS null>
   
   ? jsRef.optSealedDispatch(
   >   jsRef.Proxy(js.asObject(["handleOptSealedDispatch" =>
@@ -291,6 +291,13 @@ See broken reference section below for Ref.broken.
   >                   jsRef.promise()["promise"], false),
   >   1)
   # value: ["ok", 1]
+  
+  ? jsRef.optSealedDispatch(
+  >   jsRef.Proxy(js.asObject(["handleOptSealedDispatch" =>
+  >                                  js.asFunction(fn b { js.null() })]),
+  >                   jsRef.promise()["promise"], false),
+  >   1)
+  # value: <JS null>
   
  whenResolved
  
