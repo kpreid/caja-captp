@@ -251,7 +251,7 @@ var Ref = cajita.freeze({
             var queued = buffer[i];
             if (queued.resolver == null) {
               console.log("PROMISE DELIVERING only: ", resolution, " <- ", queued.verb, "(", queued.args, ")");
-              Ref.send(resolution, queued.verb, queued.args);
+              Ref.sendOnly(resolution, queued.verb, queued.args);
             } else {
               console.log("PROMISE DELIVERING: ", resolution, " <- ", queued.verb, "(", queued.args, ")");
               queued.resolver.resolve(Ref.send(resolution, queued.verb, queued.args));
