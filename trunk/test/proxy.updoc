@@ -89,7 +89,7 @@ XXX we have no analogue of this
 
   ? pragma.enable("accumulator")
   > accum [] for verb in ["isBroken", "isNear", "isEventual", "isFar", "isSettled", "isResolved", "optProblem"] { _.with(jsRef[verb](remote)) }
-  # value: [false, false, true, true, true, true, <JS undefined>]
+  # value: [false, false, true, true, true, true, <JS null>]
 
 XXX no traversal keys yet
   x ? def remoteKey := __equalizer.makeTraversalKey(remote)
@@ -123,7 +123,7 @@ Notice that even though the handler is written to resolve it immediately, the re
   ? [jsRef.optProblem(remote), 
   >  resolver.resolve([jsRef.broken("gone away")]),
   >  jsRef.optProblem(remote)]
-  # value: [<JS undefined>, <JS undefined>, Error: gone away]
+  # value: [<JS null>, <JS undefined>, Error: gone away]
   
   ? jsRef.send(remote, "msg", [])
   # value: [Broken: Error: gone away]
@@ -148,7 +148,7 @@ XXX no traversal keys yet
   
   ? pragma.enable("accumulator")
   > accum [] for verb in ["isBroken", "isNear", "isEventual", "isFar", "isSettled", "isResolved", "optProblem"] { _.with(jsRef[verb](remotePromise)) }
-  # value: [false, false, true, false, false, false, <JS undefined>]
+  # value: [false, false, true, false, false, false, <JS null>]
   
   ? resolver.resolve(def promiseResolution {}; [promiseResolution])
   # value: <JS undefined>
@@ -161,7 +161,7 @@ XXX no traversal keys yet
   
   ? pragma.enable("accumulator")
   > accum [] for verb in ["isBroken", "isNear", "isEventual", "isFar", "isSettled", "isResolved", "optProblem"] { _.with(jsRef[verb](remotePromise)) }
-  # value: [false, true, false, false, true, true, <JS undefined>]
+  # value: [false, true, false, false, true, true, <JS null>]
 
 --- Promise resolution cases
 
