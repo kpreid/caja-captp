@@ -30,9 +30,9 @@ function _makeRef(impl) {
   return cajita.freeze(ref);
 }
 function getRefImpl(ref) {
-  var box = (ref === undefined || ref === null) ? undefined : ref[RefBoxProperty];
-  if (box) {
-    return refSU.unseal(box);
+  var refImplBox = (ref === undefined || ref === null) ? undefined : ref[RefBoxProperty];
+  if (refImplBox) {
+    return refSU.unseal(refImplBox);
   } else {
     // This is the Near ref's ref behavior.
     
