@@ -64,7 +64,16 @@ function getRefImpl(ref) {
         return pr.promise;
       },
       sendOnly: function (verb, args) {
-        setTimeout(function () { Ref.call(ref, verb, args); }, 0);
+        console.log("SEND near only: " + ref + " <- " + verb + " (" + args + ") QUEUEING");
+        setTimeout(function () { 
+          console.log("SEND near only: " + ref + " <- " + verb + " (" + args + ") DELIVERING");
+          try {
+            Ref.call(ref, verb, args);
+          } catch (ex) {
+            console.ccCaughtError("SEND only caught: ", ref, " <- ", verb, " (", args, ") caught ", ex);
+            throw ex;
+          }
+        }, 0);
       },
       shorten: function () { return ref; },
       state: function () { return NEAR; }
