@@ -22,6 +22,18 @@ function shouldCatchToBroken(ex) {
   // return ex instanceof Error;
 }
 
+function notNearError(verb, args) {
+  throw new Error("Ref.call: not near (" + verb + "/" + args.length + ")");
+}
+
+function brokenRefMiranda(ref, verb, args) {
+  if (verb === WhenMoreResolvedMessage && args.length == 1) {
+    Ref.sendOnly(args[0], "call", [cajita.USELESS, ref]);
+  } else if (verb === WhenBrokenMessage && args.length == 1) {
+    Ref.sendOnly(args[0], "call", [cajita.USELESS, ref]);
+  }
+}
+
 function _makeRef(impl) {
   var ref = {
     toString: impl.refToString
@@ -43,6 +55,18 @@ function getRefImpl(ref) {
       optSealedDispatch: function (brand) { return null; },
       // Unlike E implementations, since we cannot implement transparent Refs, we print a prefix so that JS programmers debugging can tell the difference that JS programs may care about anyway.
       refToString: function () { return "[Ref to " + ref + "]"; },
+      call: function (verb, args) {
+        if (verb === WhenMoreResolvedMessage) {
+          var reactor = args[0];
+          console.log("Ref.call whenMoreResolved reacting (", ref, ") -> ", reactor);
+          Ref.sendOnly(reactor, "call", [cajita.USELESS, ref]);
+        } else if (verb === WhenBrokenMessage) {
+          // do nothing
+          return undefined;
+        } else {
+          return cajita.callPub(ref, verb, args);
+        }
+      },
       send: function (verb, args) {
         console.log("SEND near: ", ref, " <- ", verb, " (", args, ") QUEUEING");
         var pr = Ref.promise();
@@ -117,13 +141,13 @@ var Ref = cajita.freeze({
         }
         return "[Broken: " + s + "]";
       },
+      call: function (verb, args) {
+        brokenRefMiranda(ref, verb, args);
+        throw Ref.optProblem(ref); // XXX review safety of rethrowing
+      },
       send: function (verb, args) {
         console.log("SEND BROKEN: ", ref, " <- ", verb, " (", args, ")");
-        if (verb === WhenMoreResolvedMessage && args.length == 1) {
-          Ref.sendOnly(args[0], "call", [cajita.USELESS, ref]);
-        } else if (verb === WhenBrokenMessage && args.length == 1) {
-          Ref.sendOnly(args[0], "call", [cajita.USELESS, ref]);
-        }
+        brokenRefMiranda(ref, verb, args);
         return ref;
       },
       sendOnly: function (verb, args) {
@@ -132,12 +156,7 @@ var Ref = cajita.freeze({
       shorten: function () { return ref; },
       state: function () { return BROKEN; }
     };
-    ref = cajita.copy(_makeRef(refImpl));
-    ref[WhenMoreResolvedMessage] = ref[WhenBrokenMessage] = function (reactor) {
-      Ref.send(reactor, "call", [cajita.USELESS, ref]);
-      throw problem; // XXX review: is rethrowing problematic? What about mutability of the error, stack traces, etc?
-    };
-    return cajita.freeze(ref);
+    return ref = _makeRef(refImpl);
   },
   
   /** http://wiki.erights.org/wiki/Proxy
@@ -170,6 +189,7 @@ var Ref = cajita.freeze({
       refToString: function () {
         return Ref.isResolved(resolutionBox) ? getRefImpl(unbox()).refToString() : isFar ? "[Far ref]" : "[Promise]";
       },
+      call: notNearError,
       send: function (verb, args) {
         console.log("SEND proxy: ", ref, " <- ", verb, " (", args, ") ", (Ref.isResolved(resolutionBox) ? "FORWARDING" : "PROXYING"));
         return Ref.isResolved(resolutionBox) ? getRefImpl(unbox()).send(verb, args) : Ref.send(handler, "handleSend", cajita.freeze([verb, args]));
@@ -198,6 +218,7 @@ var Ref = cajita.freeze({
       optProblem: function () { return resolved ? getRefImpl(resolution).optProblem() : undefined; },
       optSealedDispatch: function (brand) { return resolved ? getRefImpl(resolution).optSealedDispatch(brand) : null; },
       refToString: function () { return resolved ? getRefImpl(resolution).refToString() : "[Promise]"; },
+      call: notNearError,
       send: function (verb, args) {
         if (resolved) {
           return getRefImpl(resolution).send(verb, args);
@@ -347,22 +368,7 @@ var Ref = cajita.freeze({
   call: function (ref, verb, args) {
     cajita.freeze(args);
     ref = Ref.resolution(ref);
-    if (Ref.isNear(ref)) {
-      if (verb === WhenMoreResolvedMessage) {
-        var reactor = args[0];
-        console.log("Ref.call whenMoreResolved reacting (", ref, ") -> ", reactor);
-        Ref.sendOnly(reactor, "call", [cajita.USELESS, ref]);
-      } else if (verb === WhenBrokenMessage) {
-        // do nothing
-        return undefined;
-      } else {
-        return cajita.callPub(ref, verb, args);
-      }
-    } else if (Ref.isBroken(ref)) {
-      throw Ref.optProblem(ref); // XXX review safety of rethrowing
-    } else {
-      throw new Error("Ref.call: not near (" + verb + "/" + args.length + ")");
-    }
+    return getRefImpl(ref).call(verb, args);
   },
   
   /** Corresponds to http://wiki.erights.org/wiki/Object_E#send.2F3 .
@@ -446,5 +452,7 @@ var Ref = cajita.freeze({
 
 // exports
 cajita.freeze({
-  Ref: Ref
+  Ref: Ref,
+  WhenBrokenMessage: WhenBrokenMessage,
+  WhenMoreResolvedMessage: WhenMoreResolvedMessage
 });
