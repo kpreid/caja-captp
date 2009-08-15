@@ -58,6 +58,8 @@ We can't interp.waitAtTop on an Caja-CapTP promise directly, so an adapter
 
 -------------------------------------------------------------------------------
 
+Promises
+
 XXX very incomplete tests - the first group originally written just to test the print value of a closed resolver
   
   ? def via (promiseRecTuple) [p, r] := jsRef.promise()
@@ -126,8 +128,22 @@ resolver#resolveRace
   
   ? r.isDone()
   # value: true
-  
-Ref
+
+Checking that a promise delivers a received sendOnly as a sendOnly.
+
+  ? def via (promiseRecTuple) [p, r] := jsRef.promise()
+  > jsRef.sendOnly(p, "hello", [])
+  > r.resolve(
+  >   jsRef.Proxy(js.asObject([
+  >                 "handleSend" => js.asFunction(fn verb,args { print("promise send only wrong SEND ", verb, args) }),
+  >                 "handleSendOnly" => js.asFunction(fn verb,args { print("promise send only ", verb, args) })
+  >               ]),
+  >               jsRef.promise()["promise"], false)); null
+  # stdout: promise send only hello[]
+
+-------------------------------------------------------------------------------
+
+Ref object
 
   ? jsRef
   # value: [Caja-CapTP Ref]
