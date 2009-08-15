@@ -51,7 +51,7 @@ function getRefImpl(ref) {
     // XXX review: avoid this construction on every operation?
     return cajita.freeze({
       isResolved: function () { return true; },
-      optProblem: function () {},
+      optProblem: function () { return null; },
       optSealedDispatch: function (brand) { return null; },
       // Unlike E implementations, since we cannot implement transparent Refs, we print a prefix so that JS programmers debugging can tell the difference that JS programs may care about anyway.
       refToString: function () { return "[Ref to " + ref + "]"; },
@@ -184,7 +184,7 @@ var Ref = cajita.freeze({
     
     var proxyImpl = cajita.freeze({
       isResolved: function () { return Ref.isResolved(resolutionBox) ? getRefImpl(unbox()).isResolved() : isFar; },
-      optProblem: function () { return Ref.isResolved(resolutionBox) ? getRefImpl(unbox()).optProblem() : undefined; },
+      optProblem: function () { return Ref.isResolved(resolutionBox) ? getRefImpl(unbox()).optProblem() : null; },
       optSealedDispatch: function (brand) { return Ref.isResolved(resolutionBox) ? getRefImpl(unbox()).optSealedDispatch(brand) : handler.handleOptSealedDispatch(brand); },
       refToString: function () {
         return Ref.isResolved(resolutionBox) ? getRefImpl(unbox()).refToString() : isFar ? "[Far ref]" : "[Promise]";
@@ -215,7 +215,7 @@ var Ref = cajita.freeze({
 
     var refImpl = cajita.freeze({
       isResolved: function () { return resolved ? getRefImpl(resolution).isResolved() : false; },
-      optProblem: function () { return resolved ? getRefImpl(resolution).optProblem() : undefined; },
+      optProblem: function () { return resolved ? getRefImpl(resolution).optProblem() : null; },
       optSealedDispatch: function (brand) { return resolved ? getRefImpl(resolution).optSealedDispatch(brand) : null; },
       refToString: function () { return resolved ? getRefImpl(resolution).refToString() : "[Promise]"; },
       call: notNearError,
@@ -297,11 +297,12 @@ var Ref = cajita.freeze({
   
   /** http://wiki.erights.org/wiki/Object_Ref#fulfillment.2F1 */
   fulfillment: function (ref, optWhy) {
+    // XXX should this dispatch through ref impl instead?
     ref = getRefImpl(ref).shorten();
     var i = getRefImpl(ref);
     if (i.isResolved()) {
       var p = i.optProblem();
-      if (p === undefined) {
+      if (p === null) {
         return ref;
       } else {
         throw p;
@@ -317,14 +318,14 @@ var Ref = cajita.freeze({
   },
   
   /** http://wiki.erights.org/wiki/Object_Ref#optProblem.2F1 
-      JavaScript: returns undefined for lookup failure (not null). XXX to be changed. */
+      JavaScript: returns null for lookup failure (not undefined). */
   optProblem: function (ref) {
     return getRefImpl(ref).optProblem();
   },
   
   /** http://wiki.erights.org/wiki/Object_Ref#optProblem.2F1 */
   isBroken: function (ref) {
-    return getRefImpl(ref).optProblem() !== undefined;
+    return getRefImpl(ref).optProblem() !== null;
   },
   
   /** http://wiki.erights.org/wiki/Object_Ref#isEventual.2F1 */

@@ -255,13 +255,13 @@ See broken reference section below for Ref.broken.
  optProblem
 
   ? [jsRef.optProblem('r')]
-  # value: [<JS undefined>]
+  # value: [<JS null>]
 
   ? jsRef.optProblem(jsRef.broken("expected"))
   # value: Error: expected
 
   ? [jsRef.optProblem(jsRef.promise()["promise"])]
-  # value: [<JS undefined>]
+  # value: [<JS null>]
   
  isEventual
 
