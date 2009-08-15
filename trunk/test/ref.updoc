@@ -143,6 +143,16 @@ Checking that a promise delivers a received sendOnly as a sendOnly.
 
 -------------------------------------------------------------------------------
 
+Miranda message constants; these will be used later, but we're also testing they exist here.
+
+  ? def WhenMoreResolvedMessage := exports["WhenMoreResolvedMessage"]
+  # value: "CapTP__whenMoreResolved"
+
+  ? def WhenBrokenMessage := exports["WhenBrokenMessage"]
+  # value: "CapTP__whenBroken"
+
+-------------------------------------------------------------------------------
+
 Ref object
 
   ? jsRef
@@ -318,7 +328,7 @@ See broken reference section below for Ref.broken.
  whenResolved
  
   Checking that miranda whenMoreResolved works.
-  ? jsRef.call(js.asObject([].asMap()), "CapTP__whenMoreResolved", [js.asFunction(fn r { println("=> ", r) })])
+  ? jsRef.call(js.asObject([].asMap()), WhenMoreResolvedMessage, [js.asFunction(fn r { println("=> ", r) })])
   # value: <JS undefined>
   
   # stdout: => <{}>
@@ -395,28 +405,28 @@ Details
 
 Broken references respond specially to sends or calls of whenMoreResolved and whenBroken (invoking the reactor) but still have normal broken-ref behavior of throwing.
 XXX the odd wording of the error message is an EoJS quirk, to be resolved later.
-  ? jsRef.broken("biff").CapTP__whenMoreResolved(printingReactor) 
+  ? jsRef.call(jsRef.broken("biff"), WhenMoreResolvedMessage, [printingReactor]) 
   # problem: Error: biff
   
   # stdout: [Broken: Error: biff]
   
-  ? jsRef.broken("biff").CapTP__whenBroken(printingReactor) 
+  ? jsRef.call(jsRef.broken("biff"), WhenBrokenMessage, [printingReactor]) 
   # problem: Error: biff
   
   # stdout: [Broken: Error: biff]
 
-  ? jsRef.send(jsRef.broken("biff"), "CapTP__whenMoreResolved", [printingReactor])
+  ? jsRef.send(jsRef.broken("biff"), WhenMoreResolvedMessage, [printingReactor])
   # value: [Broken: Error: biff]
   
   # stdout: [Broken: Error: biff]
 
-  ? jsRef.send(jsRef.broken("biff"), "CapTP__whenBroken", [printingReactor])
+  ? jsRef.send(jsRef.broken("biff"), WhenBrokenMessage, [printingReactor])
   # value: [Broken: Error: biff]
   
   # stdout: [Broken: Error: biff]
 
   Checking that the WMR reactor is invoked sendOnly.
-  ? jsRef.send(jsRef.broken("biff"), "CapTP__whenMoreResolved", [
+  ? jsRef.send(jsRef.broken("biff"), WhenMoreResolvedMessage, [
   >   jsRef.Proxy(js.asObject([
   >                 "handleSend" => js.asFunction(fn verb,args { print("wmrSendOnly wrong SEND ", verb, args) }),
   >                 "handleSendOnly" => js.asFunction(fn verb,args { print("wmrSendOnly ", verb, args) })
@@ -425,7 +435,7 @@ XXX the odd wording of the error message is an EoJS quirk, to be resolved later.
   # stdout: wmrSendOnly call[USELESS, [Broken: Error: biff]]
   
   Checking that sendOnly on a broken reference works.
-  ? jsRef.sendOnly(jsRef.broken("biff"), "CapTP__whenBroken", [printingReactor])
+  ? jsRef.sendOnly(jsRef.broken("biff"), WhenBrokenMessage, [printingReactor])
   # value: <JS undefined>
   
   # stdout: [Broken: Error: biff]
