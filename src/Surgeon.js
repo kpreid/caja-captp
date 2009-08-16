@@ -28,12 +28,8 @@
 
 function extend(superobj, extension) {
     var combined = cajita.copy(superobj);
-    cajita.forOwnKeys(extension, function (key) { combined[key] = extension[key]; });
+    cajita.forOwnKeys(extension, function (key, value) { combined[key] = value; });
     return cajita.freeze(combined);
-}
-
-function forValues(collection, func) {
-    cajita.forOwnKeys(collection, function (key) { func(collection[key]); });
 }
   
 /**
@@ -196,7 +192,7 @@ function Surgeon(params) {
         addFromEnv: function (otherEnv, exitNames, loaderNames) {
             cajita.enforce(cajita.isArray(exitNames));
             cajita.enforce(cajita.isArray(loaderNames));
-            forValues(exitNames, function (name) {
+            cajita.forOwnKeys(exitNames, function (_unused_, name) {
                 var value = otherEnv[name];
                 if (value !== undefined) {
                     surgeon.addExit(value, name, true);
@@ -204,7 +200,7 @@ function Surgeon(params) {
                     console.debug("no exit: ", name);
                 }
             });
-            forValues(loaderNames, function (name) {
+            cajita.forOwnKeys(loaderNames, function (_unused_, name) {
                 var value = otherEnv[name];
                 if (value !== undefined) {
                     surgeon.addLoader(value, name, true);
