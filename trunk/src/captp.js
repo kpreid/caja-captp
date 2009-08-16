@@ -811,9 +811,9 @@ var traceMessages = (function () {
   var messages = makeMessageTable(converterTable);
 
   var dispatchTable = {};
-  cajita.forOwnKeys(messages, function (i) {
-    var verb = messages[i][0];
-    var argConverters = messages[i][1];
+  cajita.forOwnKeys(messages, function (_unused_, message) {
+    var verb = message[0];
+    var argConverters = message[1];
     dispatchTable[verb] = function (args) {
       cajita.enforce(args.length === argConverters.length, "Wrong number of arguments for CapTP ", verb, ": ", args.length, " not ", argConverters.length);
       var result = [];
@@ -832,8 +832,7 @@ var traceMessages = (function () {
         return "[tracing CapTP to " + nextCapTPReceiver + "]";
       }
     };
-    cajita.forOwnKeys(dispatchTable, function (verb) {
-      var argsConverter = dispatchTable[verb];
+    cajita.forOwnKeys(dispatchTable, function (verb, argsConverter) {
       tracer[verb] = function () {
         var convArgs = argsConverter(arguments);
         try {

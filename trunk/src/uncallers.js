@@ -163,8 +163,8 @@ function CycleBreaker() {
 }
 CycleBreaker.byInverting = function (table) {
   var cb = CycleBreaker();
-  cajita.forOwnKeys(table, function (key) {
-    cb.set(table[key], key);
+  cajita.forOwnKeys(table, function (key, value) {
+    cb.set(value, key);
   });
   return cb.freeze();
 };

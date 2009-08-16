@@ -10,8 +10,7 @@
         for (var i = 0; i < submodules_concatmodule___.length; i++) {
           if (debug) console.group("Submodule #", i, " exports");
           var inst = submodules_concatmodule___[i].instantiate(triplePassedIn, cajita.snapshot(imports));
-          cajita.forOwnKeys(inst, realtriple_concatmodule___.frozenFunc(function (exportName) {
-            var value = cajita.readPub(inst, exportName);
+          cajita.forOwnKeys(inst, realtriple_concatmodule___.frozenFunc(function (exportName, value) {
             if (debug) console.log(exportName, ": ", value);
             cajita.setPub(exports, exportName, value);
             cajita.setPub(imports, exportName, value);
