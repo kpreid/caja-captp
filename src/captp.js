@@ -58,6 +58,7 @@ Swiss.T = cajita.freeze({
 Swiss.same = function (s1, s2) {
   return Swiss.T.coerce(s1).bits === Swiss.T.coerce(s2).bits;
 };
+var zeroSwiss = Swiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000");
 
 // definitions per http://www.erights.org/elib/distrib/captp/types.html
 // XXX review if these are still correct after a couple translations
@@ -254,7 +255,7 @@ var CommTableMixin = (function () {
       self.mustBeFree = function (index) {
           index = IndexT.coerce(index);
           if (!self.isFree(index)) {
-              throw new Error("" + index + " not free in " + self);
+              throw new Error("CommTable(" + self.commTableType + "): " + index + " not free");
           }
       };
 
@@ -264,7 +265,7 @@ var CommTableMixin = (function () {
       self.mustBeAlloced = function (index) {
           index = IndexT.coerce(index);
           if (self.isFree(index)) {
-              throw new Error("" + index + " not alloced in " + self);
+              throw new Error("CommTable(" + self.commTableType + "): " + index + " not alloced");
           }
       };
 
@@ -353,7 +354,7 @@ var CommTableMixin = (function () {
               }
               i = next;
           }
-          throw new Error("internal: broken free list");
+          throw new Error("CommTable(" + self.commTableType + "): internal: broken free list");
       };
 
 
@@ -366,7 +367,7 @@ var CommTableMixin = (function () {
           self.mustBeAlloced(index);
           var result = myStuff[index];
           if (identical(ThePumpkin, result)) {
-              throw new Error("export: " + index + " is a pumpkin");
+              throw new Error("CommTable(" + self.commTableType + "): export: " + index + " is a pumpkin");
           }
           return result;
       };
@@ -383,7 +384,7 @@ var CommTableMixin = (function () {
               self.alloc(index);
               myStuff[index] = value;
           } else if (strict) {
-              throw new Error("not free: " + index);
+              throw new Error("CommTable(" + self.commTableType + "): not free: " + index);
           } else {
               myStuff[index] = value;
           }
@@ -399,7 +400,7 @@ var CommTableMixin = (function () {
        */
       self.bind = function (value) {
           if (myCapacity == -1) {
-              throw new Error("cannot bind in " + self);
+              throw new Error("CommTable(" + self.commTableType + "): cannot bind");
           }
           if (0 == myFreeHead) {
               growToHold(myCapacity);
@@ -439,7 +440,8 @@ var CommTableMixin = (function () {
       };
 
       self.toString = function () {
-          return "<" + self.commTableType + " " + self.stateToString() + ">";
+          //return "[" + self.commTableType + " " + self.stateToString() + "]";
+          return "[" + self.commTableType + "]";
       };
       
       return self;
@@ -493,7 +495,7 @@ function SwissTable() {
      */
     "lookupSwiss": function (swissNum) {
       swissNum = Swiss.T.coerce(swissNum);
-      if (0 === swissNum) {
+      if (Swiss.same(zeroSwiss, swissNum)) {
           //Since Weak*Maps can't handle nulls, we handle it ourselves. <- caja-captp: This is an inherited comment.
           return undefined;
       }
@@ -588,7 +590,7 @@ function SwissTable() {
     "getNewSwiss": function (ref) {
         ref = Ref.resolution(ref);
         if (Ref.sameYet(undefined, ref)) {
-            return 0;
+            return zeroSwiss;
         }
         if (Ref.isSelfish(ref)) {
             return swissTable.getIdentity(ref);
@@ -654,7 +656,7 @@ function SwissTable() {
             //rest of the swissNumber and swissBase handling logic and make it
             //do likewise.
             var swissHash = result.hash();
-            throw new Error("May not re-register undefined for swissHash: " + E.toString(swissHash));
+            throw new Error("May not re-register undefined for swissHash: " + swissHash);
         }
         var oldRef = mySwissToRef.get(result);
         if (undefined === oldRef) {
@@ -706,7 +708,7 @@ function ExportsTable() {
   //self.smash = function (problem) {
   //    for (var i = 1; i < ancestor._getCapacity(); i++) {
   //        if (!exportsTable.isFree(i)) {
-  //            E.sendOnly(exportsTable[i], "__reactToLostClient", [problem]);
+  //            Ref.sendOnly(exportsTable[i], "__reactToLostClient", [problem]);
   //        }
   //    }
   //    ancestor.smash(problem);
