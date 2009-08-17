@@ -65,7 +65,7 @@ Utility for producing traces of CapTP communication.
   >        b.buildCall(b.buildImport("CapTP_1_descs"),
   >                    "Incoming",
   >                    [b.buildAtom(2)] )]))})))
-  # stdout: DeliverOnly(0, "foo", cajita.freeze(["bar", IncomingDesc(2)]))
+  # stdout: DeliverOnly(0, "foo", ["bar", IncomingDesc(2)])
   #         
   
   # value: <JS undefined>

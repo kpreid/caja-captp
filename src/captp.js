@@ -801,10 +801,14 @@ var traceMessages = (function () {
     }
     deProvider.toString = function () {
       var ancestor = deJavaScriptKit.makeBuilder();
+      // The twiddleBuilder pretty-prints various stuff for the sake of easy reading and writing of the tests.
       var twiddleBuilder = cajita.copy(ancestor);
       twiddleBuilder.buildCall = function (rec, verb, args) {
         if (rec === "CapTP_1_descs") {
-          return verb + "Desc(" + args + ")"; // kludge
+          return verb + "Desc(" + args + ")";
+        } else if (rec === "DataE_JS1_builtinsMaker" && verb === "frozenArray") {
+          // deJavaScriptKit has a similar hack, but it used cajita.freeze(); we want more brevity than that
+          return "[" + args.join(", ") + "]";
         } else {
           return ancestor.buildCall(rec, verb, args);
         }
