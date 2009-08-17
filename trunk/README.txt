@@ -27,3 +27,4 @@ Elsewhere:
 --- Immediate TODO list:
 
 Uncomment some tests in captp-connection and make them pass.
+Change atomType in Data-E to use guards rather than predicates.

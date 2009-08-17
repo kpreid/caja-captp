@@ -288,6 +288,48 @@ Now, the same circular structure defined with Caja-CapTP refs. (E [] literals ar
   ? r.recognize(a, deJSONTreeKit.makeBuilder())
   # value: ["defrec", 0, ["call", ["define", 2, 0], "array", ["a", ["call", ["ibid", 2], "array", ["b", ["ibid", 0]]]]]]
 
+There is an issue with buildAtom invocation: it must not (unintentionally) leak out authority-bearing objects. See http://www.eros-os.org/pipermail/e-lang/2009-August/013210.html for details. Per that design, we should be using a Data restriction, but for now we are using an 'is a JavaScript primitive type' restriction. XXX fix this once we've agreed on the design as discussed in email.
+
+  ? # Test infrastructure
+  > def anythingUncaller := js.asObject([
+  >   "optUncall" => js.asFunction(def anythingOptUncall(obj) {
+  >     return ["wasUncalled", E.toString(obj), []]
+  >   }),
+  > ])
+  > def atomStubBuilder := js.asObject({[
+  >   "atomType"  => js.asFunction(fn { js.asFunction(fn _ { true }) }),
+  >   "buildRoot" => js.asFunction(def buildRoot(node) { return node; }),
+  >   "buildAtom" => js.asFunction(def buildAtom(atom) { return ["buildAtom:", atom] }),
+  >   "buildCall" => js.asFunction(def buildCall(r,v,[]) { return ["buildCall:", v] }),
+  >   "buildPromise" => js.asFunction(def buildPromise() { return null }),
+  >   "buildDefine" => js.asFunction(def buildDefine(n,v) { return v }),
+  >   "buildDefrec" => js.asFunction(def buildDefrec(r,v) { return v })
+  > ]})
+  > def recognizer := deSubgraphKit.makeRecognizer([anythingUncaller], testUnenv)
+  > def test(obj) { return recognizer.recognize(obj, atomStubBuilder); }
+  > null
+  
+  ? test(-1)
+  # value: ["buildAtom:", -1]
+
+  ? test(-1.5)
+  # value: ["buildAtom:", -1.5]
+
+  ? test(js.null())
+  # value: ["buildAtom:", <JS null>]
+
+  ? test(js.undefined())
+  # value: ["buildAtom:", <JS undefined>]
+
+  ? test("xyz")
+  # value: ["buildAtom:", "xyz"]
+
+  ? test(def obj {})
+  # value: ["buildCall:", "<obj>"]
+
+  ? test(js.asObject([]))
+  # value: ["buildCall:", "<{}>"]
+
 -------------------------------------------------------------------------------
 
 XXX Review the E deSubgraphKit and deASTKit for cases that we don't handle
