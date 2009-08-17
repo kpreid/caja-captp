@@ -38,6 +38,20 @@ These tests do *not*, as yet, check for proper use of ejectors.
   ? def T := exports["T"]
   # value: T
 
+Any guard
+
+  ? def AnyT := T["AnyT"]
+  # value: T.AnyT
+
+  ? AnyT.coerce(0)
+  # value: 0
+
+  ? AnyT.coerce("foo")
+  # value: "foo"
+
+  ? AnyT.coerce(js.undefined())
+  # value: <JS undefined>
+
 String guard
 
   ? def stringT := T["stringT"]

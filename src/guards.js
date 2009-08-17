@@ -32,6 +32,11 @@ function makeTypeGuard(type) {
   return g;
 }
 
+var AnyT = cajita.freeze({
+  toString: function () { return "T.AnyT"; },
+  coerce: function (sp, ej) { return sp; }
+});
+
 var booleanT = makeTypeGuard("boolean");
 var functionT = makeTypeGuard("function");
 var numberT = makeTypeGuard("number");
