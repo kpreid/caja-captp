@@ -59,6 +59,30 @@ Swiss.same = function (s1, s2) {
   return Swiss.T.coerce(s1).bits === Swiss.T.coerce(s2).bits;
 };
 
+// definitions per http://www.erights.org/elib/distrib/captp/types.html
+// XXX review if these are still correct after a couple translations
+var IncomingPosT = T.int32T;
+var ExportPosT = T.int32T.above(0);
+var AnswerPosT = T.int32T.below(0);
+var ImportPosT = T.int32T.atLeast(0);
+var WireDeltaT = T.uint32T.below(Math.pow(2, 8));
+//var MsgCount = T.uint64T;
+var MsgNameT = T.stringT;
+var NonceT = T.int32T;
+// var OneArgFunc = <elib:util.OneArgFunc>
+// var Vine = any // should be rcvr (DeepFrozen missing)
+
+var parameterTypes = cajita.freeze({
+  AnswerPos: AnswerPosT,
+  ExportPos: ExportPosT,
+  ImportPos: ImportPosT,
+  IncomingPos: IncomingPosT,
+  MsgCount: MsgCountT,
+  MsgName: MsgNameT,
+  Obj: T.AnyT,
+  WireDeltaT: WireDeltaT,
+});
+
 // Produce a data structure describing the structure of CapTP messages.
 function makeMessageTable(typeMap) {
   return cajita.freeze([
@@ -71,6 +95,8 @@ function makeMessageTable(typeMap) {
     //cajita.freeze(["Wormhole",   [typeMap.Data, typeMap.VatID, typeMap.VatID]])
   ]);
 }
+
+var simpleTypeMessageTable = makeMessageTable(parameterTypes);
 
 function makeWeakKeyMap() { 
   return cajita.newTable(true); 
@@ -851,9 +877,14 @@ var traceMessages = (function () {
 
 // exports
 cajita.freeze({
-  CapTPConnection: CapTPConnection,
-
-  // exported only for testing
+  AnswerPosT: AnswerPosT,
+  ExportPosT: ExportPosT,
+  ImportPosT: ImportPosT,
+  IncomingPosT: IncomingPosT,
+  MsgCountT: MsgCountT,
+  MsgNameT: MsgNameT,
+  WireDeltaT: WireDeltaT,
+  
   AnswersTable: AnswersTable,
   ExportsTable: ExportsTable,
   LocatorUnum: LocatorUnum,
@@ -865,5 +896,9 @@ cajita.freeze({
   Swiss: Swiss,
   VatID: VatID,
   
+  parameterTypes: parameterTypes,
+  makeMessageTable: makeMessageTable,
+  simpleTypeMessageTable: simpleTypeMessageTable,
+
   traceMessages: traceMessages
 });
