@@ -1,0 +1,1228 @@
+# Copyright 2007-2009 Kevin Reid, under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+NOTE: The lines beginning with "x " are the remainder of the original E-on-CL captp-connection.updoc that doesn't pass yet.
+
+-------------------------------------------------------------------------------
+-- This file was derived from E-on-CL's CapTP; improvements should be shared --
+-------------------------------------------------------------------------------
+
+  ? pragma.syntax("0.9")
+  ? pragma.enable("accumulator")
+  
+x  ? def makeFlexMap := <elib:tables.makeFlexMap>; null
+x  ? def makeVine := <import:net.captp.tables.makeVine>; null
+
+In this file, we test the implementation of the CapTP operations and associated state.
+
+-------------------------------------------------------------------------------
+The following code is boilerplate to load a Cajita module with collecting the return value. This code should be folded into some Cajita or EoJS library.
+
+  ? def js := <import:org.erights.eojs.jsTools>; null
+  ? def cajita := <import:org.erights.eojs.cajita>; null
+
+  ? def oldNewModuleHandler := cajitaPriv.getNewModuleHandler()
+  >
+  > def loadAndWait(url) {
+  >   def value
+  >   cajitaPriv.setNewModuleHandler(js.asObject([
+  >     "handle" => js.asFunction(fn newModule {
+  >       cajitaPriv.setNewModuleHandler(oldNewModuleHandler)
+  >       bind value := newModule.instantiate(cajitaPriv.get___(), oldNewModuleHandler.getImports())
+  >     })
+  >   ]))
+  >   EoJS.asyncLoad(url)
+  >   interp.waitAtTop(value)
+  >   return value
+  > }
+  > null
+  
+  ? def exports := loadAndWait("../src/everything.out.js"); null
+  ? cajitaPriv.setNewModuleHandler(oldNewModuleHandler)
+  
+  x ? cajitaPriv.setLogFunc(js.asFunction(traceln));
+
+-------------------------------------------------------------------------------
+
+  ? def jsnull := js.null(); null
+  ? def makeError := <import:org.erights.eojs.cajitaEnv>["Error"]; null
+
+  ? def jsRef := exports["Ref"]; null
+  ? def deSubgraphKit := exports["deSubgraphKit"]; null
+  ? def CycleBreaker := exports["CycleBreaker"]; null
+  ? def makeSwiss := exports["Swiss"]; null
+
+  ? def makeCapTPConnection := exports["CapTPConnection"]; null
+  ? def makeSwissTable := exports["SwissTable"]; null
+  ? def makePromiseGiftTable := exports["PromiseGiftTable"]; null
+  ? def makeNearGiftTable := exports["NearGiftTable"]; null
+  ? def traceMessages := exports["traceMessages"]; null
+
+  ? def nonceLocatorIndex := 0; null
+  ? def nullSwissNumber := makeSwiss("\u0000" * 16); null
+  
+Test framework:
+
+A mock finalization interface, with operations to trigger finalization of obects created in a particular time period:
+  
+  ? var finalizers := []
+  > var fIndex := 0
+  > def pseudoWhenGarbage := js.asFunction(def pseudoWhenGarbage_E(r, reactor) {
+  >   #traceln(`Adding finalizer for $r -> $reactor`)
+  >   finalizers with= reactor
+  > })
+  > def clearFinalizers() { finalizers := [] }
+  > def runFinalizers() {
+  >   for reactor in finalizers {
+  >     #traceln(`Running $reactor`)
+  >     reactor <- ()
+  >   }
+  >   finalizers := []
+  > }
+  > null
+
+Objects to represent the descriptors used by CapTP for connection-spanning references:
+
+  ? def descs {
+  >   match [v, a] { 
+  >     js.asObject([
+  >       "toString" => js.asFunction(fn { 
+  >         v + "Desc(" + E.toString(a) + ")"
+  >       }),
+  >       "CapTP__optUncall" => js.asFunction(fn { [descs, v, a] }),
+  >     ]);
+  >   }
+  > }; null
+
+LocatorUnum presences:
+
+  ? def locatorUnumLocal {}
+  > def locatorUnumRemote {}
+  > null
+
+Data-E setup:
+  
+  ? def testGraphRecognizer := {
+  >   def envF := cajita.copy(exports["defaultEnv"])
+  >   envF["CapTP_1_descs"] := descs
+  >   envF["CapTP_1_locatorUnum"] := locatorUnumRemote
+  >   envF["CapTP_JS1_Swiss"] := makeSwiss
+  >   deSubgraphKit.makeRecognizer(js.undefined(), CycleBreaker.byInverting(envF))
+  > }; null
+
+buildIn takes an object in our test environment, containing objects made by 'descs' above, and transforms them as a CapTP wire protocol unserializer would.
+
+  ? def buildIn(obj) {
+  >   #return once(fn b { testGraphRecognizer.recognize(obj, b) })
+  >   return js.asFunction(fn b { testGraphRecognizer.recognize(obj, b) }) # XXX reenable once
+  > }; null
+
+Mechanism to wait for an outgoing CapTP message. expect() waits until a matching call to notifyReceiver("...").
+
+  ? def [var expectQueue, var expectQTail] := Ref.promise()
+  > def notifyReceiver := js.asFunction(fn text { println(text); expectQueue <- get(0) <- resolve(text); expectQueue := expectQueue <- get(1) })
+  > def expect() {
+  >   def [p,r] := Ref.promise()
+  >   def [qp,qr] := Ref.promise()
+  >   expectQTail.resolve([r, qp])
+  >   expectQTail := qr
+  >   interp.waitAtTop(p)
+  > }
+  > null
+
+Mock other-connections-of-this-comm-system for 3-vat introductions:
+
+  ? 
+  > def [otherConnProxySealer, otherConnProxyUnsealer] := {
+  >   def obj := cajita.makeSealerUnsealerPair()
+  >   [obj["seal"], obj["unseal"]]
+  > }
+  > null
+  
+  ? def otherPromiseGiftTable := makePromiseGiftTable(pseudoWhenGarbage, def notNonceLocator {to ignore(_) {}})
+  > def otherNearGiftTable := makeNearGiftTable(pseudoWhenGarbage)
+  > null
+
+  ? def hub {
+  >   to amplifyFor3Desc(specimen, recipID) {
+  >     if (otherConnProxyUnsealer.amplify(specimen) =~ [wantsRecip]) {
+  >       return wantsRecip(recipID)
+  >     }
+  >   }
+  >   to isOurProxy(specimen) {
+  >     return otherConnProxyUnsealer.amplify(specimen) =~ [_]
+  >   }
+  >   #to get3DescBrand() { return otherConnProxyBrand }
+  >   to get3DescSealer() { return otherConnProxySealer }
+  >   to get(searchPath, vatID) {
+  >     println(`hub.get($searchPath, ${E.toQuote(vatID)})`)
+  >     return def otherVat {
+  >       to nonceLocator() {
+  >         return def otherNonceLocator {
+  >           match msg { println(`<nonce locator ref for ${E.toQuote(vatID)}>.$msg`); `${msg[0]} result` }
+  >         }
+  >       }
+  >       to getNearGiftTable() { return otherNearGiftTable }
+  >       to getPromiseGiftTable() { return otherPromiseGiftTable }
+  >       match msg { println(`<other vat ${E.toQuote(vatID)}>.$msg`) }
+  >     }
+  >   }
+  >   match msg { println(`hub.$msg`) }
+  > }; null
+
+To make the tests' use of indexes and swiss numbers independent of each other, we set up a new connection repeatedly using this function.
+
+pseudoEntropy is a deterministic mock RNG. Its output will mostly appear in these tests hashed:
+  makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0098\u0096\u0081") hash == makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`")
+  makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0098\u0096\u0082") hash == makeSwiss("\u0000\u00b5\u001a?a\u00e7*\u009f\u00c7\u0001\u00ff\u00dc\u00fb\u0092\u0003\u00a6\u0015\u00ae\u00e5>m")
+  makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0098\u0096\u0083") hash == makeSwiss("\u0000\bF\u00ff\u000e~G\t\u001a/\u0085\u007f\u007f\u00da\u00d6C\u00b2\u00b8\u008dE\u00c1")
+
+  ? def makeTestConnection() {
+  >   var i := 10000000
+  >   def pseudoEntropy {
+  >     to nextSwiss() { return (i += 1) }
+  >   }
+  >
+  >   def swissTable := makeSwissTable(pseudoEntropy, "stub weakKeyMap", "stub weakValueMap")
+  >     
+  >   def [r, outgoingConnection, peerConnection] := makeCapTPConnection(
+  >     def trace := traceMessages(js.asFunction(notifyReceiver), jsnull),
+  >     swissTable,
+  >     locatorUnumLocal,
+  >     pseudoWhenGarbage,
+  >     hub,
+  >     "tLocalVatID",
+  >     ["tRemoteSearchPath"],
+  >     "tRemoteVatID")
+  >   return [swissTable, r, outgoingConnection, peerConnection]
+  > }; null
+  
+--- Incoming DeliverOp ---
+
+  ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+  # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+
+At this point, the only thing the remote side can possibly do is close the connection or talk to the NonceLocator, which is at the well-known position 0. We'll ask it for null, which has the well-known swiss number 0.
+
+The index provided is negative because it is chosen by the remote side. <http://www.erights.org/elib/distrib/captp/4tables.html>
+
+The 2-cycle delay on the redirector reports is because there is first a send of answer <- __whenMoreResolved(redirector) followed by the __whenMoreResolved's response send.
+
+
+x   ? receiver.Deliver(-1,
+x   >                  buildIn(descs.NewFar(1, makeSwiss("\u0004\u00DB\u0048\u0003"))),
+x   >                  nonceLocatorIndex, 
+x   >                  "lookupSwiss",
+x   >                  buildIn([nullSwissNumber, jsnull]))
+x   # value: <JS undefined>
+x 
+x   ? expect()
+x   # stdout: DeliverOnly(1, "run", [null])
+x   #         
+x 
+x null should now be present in the connection's answers table at -1.
+x 
+x   ? receiver.Deliver(-2,
+x   >                  buildIn(descs.Import(1)),
+x   >                  -1,
+x   >                  "__getAllegedType",
+x   >                  buildIn([]))
+x   # value: <JS undefined>
+x 
+x   ? expect()
+x   # stdout: DeliverOnly(1, "run", [NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))])
+x   #         
+x   
+x   ? receiver.Deliver(-3,
+x   >                  buildIn(descs.Import(1)),
+x   >                  -2,
+x   >                  "getFQName",
+x   >                  buildIn([]))
+x   # value: <JS undefined>
+x 
+x   ? expect()
+x   # stdout: DeliverOnly(1, "run", ["org.cubik.cle.prim.null"])
+x   #         
+x 
+x Positive/zero answer index is an error:
+x 
+x   ? receiver.Deliver(0, buildIn(descs.Import(1)), -2, "getFQName", buildIn([]))
+x   # problem: Error: Too high for a AnswerPos
+x 
+x   ? receiver.Deliver(1, buildIn(descs.Import(1)), -2, "getFQName", buildIn([]))
+x   # problem: Error: Too high for a AnswerPos
+x 
+x Missing recipient:
+x 
+x   ? receiver.Deliver(-1, buildIn(descs.Import(1)), -999, "getFQName", buildIn([]))
+x   # problem: Error: CommTable(answersTable): 999 not alloced
+x 
+x --- Incoming DeliverOnlyOp ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x 2-cycle delay on this test because the reactor invocation is itself a send.
+x 
+x Delivery to the NonceLocator:
+x 
+x   ? receiver.DeliverOnly(0,
+x   >                      "CapTP__whenMoreResolved",
+x   >                      buildIn([descs.NewFar(1, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0001+\u00fe\u00f5\u00df\u00e4\b"))]))
+x   # value: <JS undefined>
+x 
+x   ? expect()
+x   # stdout: DeliverOnly(1, "run", [ImportDesc(0)])
+x   #         
+x 
+x Delivery to an answer, creating the answer first:
+x 
+x   ? receiver.Deliver(-1, buildIn(descs.NewFar(2, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000G\u00c1\u00de7\u008e\u00e0"))), 
+x   >                  0, "__respondsTo", buildIn(["ignore", 1]))
+x   # value: <JS undefined>
+x 
+x   ? expect()
+x   # stdout: DeliverOnly(2, "run", [true])
+x   #         
+x 
+x   ? receiver.DeliverOnly(-1,
+x   >                      "CapTP__whenMoreResolved",
+x   >                      buildIn([descs.Import(1)]))
+x   # value: <JS undefined>
+x 
+x   ? expect()
+x   # stdout: DeliverOnly(1, "run", [true])
+x   #         
+x 
+x Delivery to an export:
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "export", [js.asFunction(def exported(x) {println(x)})])
+x   # value: <JS undefined>
+x 
+x   ? expect()
+x   # stdout: DeliverOnly(0, "export", [NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))])
+x   #         
+x 
+x   ? receiver.DeliverOnly(1,
+x   >                      "run",
+x   >                      buildIn(["foo"]))
+x   # value: <JS undefined>
+x 
+x   # stdout: foo
+x   #         
+x 
+x --- Incoming GCExportOp ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x To test GCExportOp, we must first export something.
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "exportTest", [def exported(x) {println(x)}])
+x   # value: <JS undefined>
+x 
+x   ? expect()
+x   # stdout: DeliverOnly(0, "exportTest", [NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))])
+x   #         
+x 
+x wireDelta of 0 should have no effect.
+x 
+x   ? receiver.GCExport(1, 0)
+x   # value: <JS undefined>
+x 
+x   ? receiver.DeliverOnly(1, "run", buildIn(["still here"]))
+x   # value: <JS undefined>
+x 
+x   # stdout: still here
+x   #         
+x   
+x wireDelta of 1 should delete the export.
+x 
+x   ? receiver.GCExport(1, 1)
+x   # value: <JS undefined>
+x 
+x   ? receiver.DeliverOnly(1, "run", buildIn(["gone"]))
+x   # problem: Error: CommTable(exportsTable): 1 not alloced
+x 
+x A reference is collected once the sum of wireDeltas in all received GCExport messages exceeds the number of times it is exported. Here's a multiple export:
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "exportTest2a", [exported])
+x   # value: <JS undefined>
+x 
+x   ? expect()
+x   # stdout: DeliverOnly(0, "exportTest2a", [NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))])
+x   #         
+x 
+x (The NewFarDesc's index is the same because 1 is at the head of the exports table's free list, not because of any deliberate relationship.)
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "exportTest2b", [exported])
+x   > jsRef.sendOnly(outgoingConnection.nonceLocator(), "exportTest2c", [exported])
+x   # value: <JS undefined>
+x 
+x   ? expect(); expect()
+x   # stdout: DeliverOnly(0, "exportTest2b", [ImportDesc(1)])
+x   #         DeliverOnly(0, "exportTest2c", [ImportDesc(1)])
+x   #         
+x 
+x wireDelta of 1 should have no effect (export count now 2).
+x 
+x   ? receiver.GCExport(1, 1)
+x   # value: <JS undefined>
+x 
+x   ? receiver.DeliverOnly(1, "run", buildIn(["still here #2"]))
+x   # value: <JS undefined>
+x 
+x   # stdout: still here #2
+x   #         
+x   
+x Additional wireDelta of 2 should balance the three previous references.
+x 
+x   ? receiver.GCExport(1, 2)
+x   # value: <JS undefined>
+x 
+x   ? receiver.DeliverOnly(1, "run", buildIn(["gone #2"]))
+x   # problem: Error: CommTable(exportsTable): 1 not alloced
+x 
+x 
+x --- Incoming GCAnswerOp ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x Create an answer.
+x 
+x   ? receiver.Deliver(-1, buildIn(descs.Incoming(0)), 0, "__respondsTo", buildIn(["ignore", 1]))
+x   # value: <JS undefined>
+x   
+x   
+x Deliveries to the answer are possible now:
+x 
+x   ? receiver.DeliverOnly(-1,
+x   >                      "CapTP__whenMoreResolved",
+x   >                      buildIn([descs.NewFar(1, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000+\\\u00b4|\u00c2\u00af\u00a4l"))]))
+x   # value: <JS undefined>
+x 
+x   ? expect()
+x   # stdout: DeliverOnly(1, "run", [true])
+x   #         
+x 
+x but not after GCAnswerOp:
+x 
+x   ? receiver.GCAnswer(-1)
+x   # value: <JS undefined>
+x 
+x   ? receiver.DeliverOnly(-1,
+x   >                      "CapTP__whenMoreResolved",
+x   >                      buildIn([descs.Import(1)]))
+x   # problem: Error: CommTable(answersTable): 1 not alloced
+x 
+x --- Incoming ShutdownOp ---
+x 
+x XXX do this (shut down connection iff no more messages than the specified count have been sent by the recipient). Must not be visible to code. Note that 
+x 
+x (IRC log from July 28, 2007)
+x <markmiller> The funny case is messages to be sent to zero when a shutdown might happen
+x <markmiller> These need to be buffered, so that if a shutdown does happen, that can be resent transparently on a newly formed connection.
+x <kpreid> ow
+x <markmiller> This is much of why it was never fully implemented.
+x <kpreid> whereas in the current impls, it's essentially a connection-specific always-live-ref, yes?
+x <markmiller> GCing connections seems to be hard
+x <markmiller> yes
+x 
+x --- Incoming TerminatedOp ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x There are several cases to check the behavior of:
+x 
+x Imported far ref:
+x   
+x   ? def outgoingFar := outgoingConnection.nonceLocator() <- getTerminatedTestRef1()
+x   # value: <Promise>
+x   
+x   ? expect()
+x   # stdout: Deliver(-1, NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`")), 0, "getTerminatedTestRef1", [])
+x   #         
+x   
+x   ? receiver.DeliverOnly(1, "run", buildIn([descs.NewFar(1, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0004\u00d2"))]))
+x   # value: <JS undefined>
+x 
+x Question (promise resulting from DeliverOp):
+x 
+x   ? def outgoingQuestion := outgoingConnection.nonceLocator() <- getTerminatedTestRef2()
+x   # value: <Promise>
+x   
+x   ? expect()
+x   # stdout: Deliver(-2, NewFarDesc(2, makeSwiss("\u0000\u00b5\u001a?a\u00e7*\u009f\u00c7\u0001\u00ff\u00dc\u00fb\u0092\u0003\u00a6\u0015\u00ae\u00e5>m")), 0, "getTerminatedTestRef2", [])
+x   #         
+x   
+x Imported remote promise:
+x 
+x   ? def outgoingPromise := outgoingConnection.nonceLocator() <- getTerminatedTestRef3()
+x   # value: <Promise>
+x 
+x   ? expect()
+x   # stdout: Deliver(-3, NewFarDesc(3, makeSwiss("\u0000\bF\u00ff\u000e~G\t\u001a/\u0085\u007f\u007f\u00da\u00d6C\u00b2\u00b8\u008dE\u00c1")), 0, "getTerminatedTestRef3", [])
+x   #         
+x 
+x   ? receiver.DeliverOnly(3, "run", buildIn([descs.NewRemotePromise(2, -1, 4352160789)]))
+x   # value: <JS undefined>
+x 
+x Export, which should receive a __reactToLostClient:
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "TerminatedExportTest", [
+x   >   js.asFunction(def ttReactReceiver {to __reactToLostClient(p) { print(`rTLC expecter got $p`) }})])
+x   # value: <JS undefined>
+x 
+x   ? expect()
+x   # stdout: DeliverOnly(0, "TerminatedExportTest", [NewFarDesc(4, 412897248500657771667886264468852369692723684603)])
+x   #         
+x 
+x The termination:
+x 
+x   ? receiver.Terminated(buildIn(makeError("foo")))
+x   # stdout: rTLC expecter got foo
+x 
+x Consequences:
+x 
+x   ? [outgoingFar, outgoingQuestion, outgoingPromise, outgoingConnection.nonceLocator()]
+x   # value: [[Broken: Error: foo], [Broken: Error: foo], [Broken: Error: foo], [Broken: Error: foo]]
+x   
+x   ? jsRef.optProblem(outgoingFar) == jsRef.optProblem(outgoingQuestion)
+x   # value: true
+x 
+x   ? jsRef.optProblem(outgoingFar) == jsRef.optProblem(outgoingPromise)
+x   # value: true
+x 
+x Checking for robust termination:
+x 
+x We don't need to test anything but the receiver, builder-maker, and builders, because every other access is an eventual ref that gets broken, as tested above.
+x 
+x   ? receiver.DeliverOnly(0, "", buildIn([]))
+x   # problem: Error: this CapTP connection has been terminated (problem: foo)
+x 
+x   ? receiver.Deliver(-1, buildIn(jsnull), 0, "", buildIn([]))
+x   # problem: Error: this CapTP connection has been terminated (problem: foo)
+x 
+x   ? receiver.GCAnswer(-1)
+x   # problem: Error: this CapTP connection has been terminated (problem: foo)
+x 
+x   ? receiver.GCExport(1, 0)
+x   # problem: Error: this CapTP connection has been terminated (problem: foo)
+x 
+x   x ? receiver.Shutdown(0)
+x   x # problem: Error: this CapTP connection has been terminated (problem: foo)
+x 
+x   ? receiver.Terminated(buildIn("bar"))
+x   # problem: Error: this CapTP connection has been terminated (problem: foo)
+x 
+x   x ? receiver.Wormhole(-1, buildIn(jsnull), 0, "", buildIn([]))
+x   x # problem: Error: this CapTP connection has been terminated (problem: foo)
+x 
+x XXX test these things' behavior after termination:
+x   proxy finalizer
+x   locally referenced redirector (gets exported then sent home)
+x 
+x --- Incoming WormholeOp ---
+x 
+x XXX we don't have VatID processing yet
+x 
+x ------ Incoming descriptors ------
+x 
+x --- Incoming NewFarDesc ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x   ? receiver.DeliverOnly(0, "CapTP__whenMoreResolved", buildIn([descs.NewFar(1, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003<\u00ca\u0089\u00c1"))]))
+x   ? expect()
+x   # stdout: DeliverOnly(1, "run", [ImportDesc(0)])
+x   #         
+x 
+x --- Incoming NewRemotePromiseDesc, and delayed redirection ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x First we set up an incoming reference to an object to catch the remote promise.
+x 
+x   ? clearFinalizers()
+x   > def remotePromise
+x   > def promiseReceiver(p) {
+x   >   println(`got $p`)
+x   >   bind remotePromise := p
+x   > }
+x   > def swiss :int := swissTable.getNewSwiss(promiseReceiver); null
+x   > receiver.Deliver(-3, buildIn(descs.NewFar(2, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003\u00a0"))), 0, "lookupSwiss", buildIn([swiss, jsnull]))
+x   > receiver.GCAnswer(-3)
+x   ? expect()
+x   # stdout: DeliverOnly(2, "run", [NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))])
+x   #         
+x 
+x Then we deliver a message containing the promise.
+x 
+x   ? receiver.DeliverOnly(1, "run", buildIn([descs.NewRemotePromise(3, -4, def remotePromiseRdrBase := makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u00ff\u00c0\u00c6\u001d"))]))
+x   > receiver.GCExport(1, 1)
+x   # value: <JS undefined>
+x 
+x   # stdout: got <Promise>
+x   #         
+x 
+x Testing sends to the promise:
+x 
+x   ? jsRef.sendOnly(remotePromise, "hello eventual", [])
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(3, "hello eventual", [])
+x   #         
+x 
+x Testing that the promise is present in the imports table:
+x 
+x   ? receiver.DeliverOnly(0, "CapTP__whenMoreResolved", buildIn([descs.Import(3)]))
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(3, "run", [ImportDesc(0)])
+x   #         
+x 
+x The redirector should be accessible by our provided SwissBase:
+x 
+x   ? receiver.Deliver(-3, buildIn(descs.Import(2)), 0, "lookupSwiss", buildIn([remotePromiseRdrBase.hash(), jsnull]))
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(2, "run", [NewFarDesc(1, 216307466466887903142951307717254789854244528344)])
+x   #         
+x 
+x   Export index 2 now holds the redirector.
+x 
+x (remotePromiseRdrBase twice hashed == 216307466466887903142951307717254789854244528344)
+x 
+x Invoking the redirector performs a delayed redirection, to ensure that messages sent to the resolution don't arrive before the messages previously sent to the promise.
+x 
+x A delayed redirection is: __whenMoreResolved is sent to the ... XXX finish this explanation
+x 
+x   ? def unoptimizableRedirection := js.asObject({ # XXX implements pbc
+x   >   "CapTP__optUncall" => js.asFunction(fn { return [...XXX need to choose an uncall to use here, "call", [null, ]] })
+x   > })
+x 
+x   ? receiver.DeliverOnly(-4, "run", buildIn([unoptimizableRedirection]))
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(3, "CapTP__whenMoreResolved", [NewFarDesc(2, makeSwiss("\u0000\u00b5\u001a?a\u00e7*\u009f\u00c7\u0001\u00ff\u00dc\u00fb\u0092\u0003\u00a6\u0015\u00ae\u00e5>m"))])
+x   #         
+x 
+x Export 2 is the non-delayed redirector.
+x 
+x   ? receiver.DeliverOnly(2, "run", buildIn(["secondRedirValue"]))
+x   # value: <JS undefined>
+x   
+x   ? remotePromise
+x   # value: "secondRedirValue"
+x 
+x XXX explain why the second redirection wins
+x 
+x The remote promise proxy is now garbage, so CapTP should send GCExportOp:
+x 
+x   ? runFinalizers()
+x   ? expect(); expect()
+x   # stdout: GCExport(3, 2)
+x   #         GCExport(2, 2)
+x   #         
+x 
+x Index 3 is the remote promise (passed in once as NewRemotePromiseDesc and once as ImportDesc), and index 2 is the twice-used fake redirector for incoming deliveries.
+x 
+x   XXX further tests
+x 
+x --- Incoming NewRemotePromiseDesc without delayed redirection ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x First we publish the resolver to catch the remote promise.
+x 
+x   ? def swiss :int := swissTable.getNewSwiss(def remotePromise); null
+x   > receiver.Deliver(-3, buildIn(descs.NewFar(2, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003\u00a0"))), 0, "lookupSwiss", buildIn([swiss, null]))
+x   > receiver.GCAnswer(-3)
+x   ? expect()
+x   # stdout: DeliverOnly(2, "run", [NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))])
+x   #         
+x 
+x Then we deliver a message containing the promise.
+x 
+x   ? receiver.DeliverOnly(1, "resolve", buildIn([descs.NewRemotePromise(3, -4, def remotePromiseRdrBase := 4290823709)]))
+x   # value: <JS undefined>
+x   
+x Invoking the redirector causes the remote promise to resolve immediately:
+x 
+x   ? receiver.DeliverOnly(-4, "run", buildIn([56]))
+x   # value: <JS undefined>
+x   
+x   ? remotePromise
+x   # value: 56
+x 
+x --- Incoming ImportDesc ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x Setting up a proxy for testing:
+x 
+x   ? def swiss :int := swissTable.getNewSwiss(def _ {
+x   >   to compare(x, y) { println(x == y) }
+x   >   to compareNL(x) { println(x == outgoingConnection.nonceLocator()) }
+x   > }); null
+x   > receiver.Deliver(-1, buildIn(descs.NewFar(1, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u008e\'\u00e3\u00f4"))), 0, "lookupSwiss", buildIn([swiss, null]))
+x   > receiver.GCAnswer(-1)
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(1, "run", [NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))])
+x   #         
+x 
+x Actual testing:
+x 
+x   ? receiver.DeliverOnly(1, "compare", buildIn([descs.NewFar(1, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003<\u00ca\u0089\u00c1")), 
+x   >                                             descs.Import(1)]))
+x   # value: <JS undefined>
+x   
+x   # stdout: true
+x   #         
+x 
+x   ? receiver.DeliverOnly(1, "whatever", buildIn([descs.Import(999)]))
+x   # problem: Error: ProxiesTable: 999 not alloced
+x 
+x   ? receiver.DeliverOnly(1, "compareNL", buildIn([descs.Import(0)]))
+x   # value: <JS undefined>
+x   
+x   # stdout: true
+x   #         
+x 
+x An ImportDesc cannot have a negative index (receiver's questions table) because that would conflict with the receiver being able to GC its questions table entries.
+x 
+x --- Incoming IncomingDesc ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x   ? def swiss :int := swissTable.getNewSwiss(def f(x) { println(x == f) }); null
+x 
+x   ? receiver.Deliver(-1, buildIn(descs.Incoming(0)), 0, "lookupSwiss", buildIn([swiss, null]))
+x   # value: <JS undefined>
+x   
+x   
+x   ? receiver.DeliverOnly(-1, "run", buildIn([descs.Incoming(-1)]) )
+x   # value: <JS undefined>
+x   
+x   # stdout: true
+x   #         
+x 
+x --- Incoming Promise3Desc ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x   ? def swiss :int := swissTable.getNewSwiss(def f(x) { println(x); Ref.whenResolved(x, println) }); null
+x 
+x   ? receiver.Deliver(-1, buildIn(descs.Incoming(0)), 0, "lookupSwiss", buildIn([swiss, null]))
+x   # value: <JS undefined>
+x   
+x   ? receiver.DeliverOnly(-1, "run", buildIn([
+x   >   descs.Promise3(["a"], 
+x   >   "b",
+x   >   3241570689,
+x   >   descs.NewFar(1, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\t#^\f\u0098")))]))
+x   # stdout: hub.get(["a"], "b")
+x   #         
+x   
+x   # value: <JS undefined>
+x   
+x   # stdout: <Promise>
+x   #
+x   
+x   ? expect()
+x   # stdout: <nonce locator ref for "b">.["acceptFrom", [["tRemoteSearchPath"], "tRemoteVatID", 3241570689, <vine>]]
+x   #         acceptFrom result
+x   #         
+x 
+x --- Incoming Far3Desc ---
+x 
+x XXX
+x 
+x ------ Outgoing operations ------
+x 
+x --- Outgoing DeliverOnlyOp ---
+x XXX write this
+x 
+x --- Outgoing DeliverOp ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x   ? def outgoingFar := outgoingConnection.nonceLocator() <- lookupSwiss(12345, null)
+x   # value: <Promise>
+x   ? expect()
+x   # stdout: Deliver(-1, NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`")), 0, "lookupSwiss", [12345, null])
+x   #         
+x 
+x The above is a delivery to the NonceLocator, which is a bit of an unusual case; so we will also test a Far ref.
+x 
+x The remote side invokes the redirector for 'r', resolving it to a Far ref with import index 1.
+x 
+x   ? receiver.DeliverOnly(1, "run", buildIn([descs.NewFar(1, makeSwiss(2398478938902))]))
+x   # value: <JS undefined>
+x   
+x   ? outgoingFar
+x   # value: <Far ref>
+x 
+x Here's a normal message to that Far ref.
+x 
+x   ? outgoingFar <- foo()
+x   # value: <Promise>
+x   ? expect()
+x   # stdout: Deliver(-2, NewFarDesc(2, makeSwiss("\u0000\u00b5\u001a?a\u00e7*\u009f\u00c7\u0001\u00ff\u00dc\u00fb\u0092\u0003\u00a6\u0015\u00ae\u00e5>m")), 1, "foo", [])
+x   #         
+x 
+x 
+x --- Outgoing GCExportOp ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x GCExportOp is sent when a proxy for an import-table entry has gone away; so to test it, we simulate an arriving import which is discarded.
+x 
+x   ? clearFinalizers()
+x   > receiver.DeliverOnly(0, "__optSealedDispatch", buildIn([descs.NewFar(2, makeSwiss(38249328))]))
+x   # value: <JS undefined>
+x   
+x   ? runFinalizers()
+x   ? expect()
+x   # stdout: GCExport(2, 1)
+x   #         
+x 
+x Note that the sender of GCExportOp does not know whether the index was actually freed by the remote side; if it was, the index will be overwritten by a New*Desc; otherwise, an ImportDesc will arrive causing the creation of a new proxy for the existing table entry.
+x 
+x   ? clearFinalizers()
+x   > receiver.DeliverOnly(0, "__optSealedDispatch", buildIn([descs.NewFar(2, makeSwiss(38249328))]))
+x   > receiver.DeliverOnly(0, "__optSealedDispatch", buildIn([descs.Import(2)]))
+x   # value: <JS undefined>
+x   
+x   ? runFinalizers()
+x   ? expect()
+x   # stdout: GCExport(2, 2)
+x   #         
+x 
+x 
+x --- Outgoing GCAnswerOp ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x We create a remote promise for an answer and tell the connection that it has been GCed.
+x 
+x   ? clearFinalizers()
+x   > E.send(outgoingConnection.nonceLocator(), "lookupSwiss", [93478934, null])
+x   > null
+x   ? expect()
+x   # stdout: Deliver(-1, NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`")), 0, "lookupSwiss", [93478934, null])
+x   #         
+x   
+x   ? runFinalizers()
+x   ? expect()
+x   # stdout: GCAnswer(-1)
+x   #
+x 
+x After GC, the question table entry is free and will be reused.
+x 
+x   ? jsRef.send(outgoingConnection.nonceLocator(), "lookupSwiss", [23948931413532, null])
+x   > null
+x   ? expect()
+x   # stdout: Deliver(-1, NewFarDesc(2, makeSwiss("\u0000\u00b5\u001a?a\u00e7*\u009f\u00c7\u0001\u00ff\u00dc\u00fb\u0092\u0003\u00a6\u0015\u00ae\u00e5>m")), 0, "lookupSwiss", [23948931413532, null])
+x   #         
+x   
+x   ? runFinalizers()
+x   ? expect()
+x   # stdout: GCAnswer(-1)
+x   #
+x 
+x 
+x --- Outgoing ShutdownOp ---
+x XXX write this
+x --- Outgoing TerminatedOp ---
+x XXX write this
+x --- Outgoing WormholeOp ---
+x XXX write this
+x 
+x ------ Outgoing descriptors ------
+x 
+x --- Outgoing NewFarDesc ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "newFarDescTest", [def newSelfish {}])
+x   ? expect()
+x   # stdout: DeliverOnly(0, "newFarDescTest", [NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))])
+x   #         
+x 
+x After an outgoing NewFarDesc, the object should be present in the exports table, so further outgoing messages use ImportDesc:
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "sameFarTest", [newSelfish])
+x   ? expect()
+x   # stdout: DeliverOnly(0, "sameFarTest", [ImportDesc(1)])
+x   #         
+x 
+x --- Outgoing NewRemotePromiseDesc ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x   ? var wmrs := []
+x   > def resolution
+x   > throw("XXX this needs to be converted to jsRef.Proxy")
+x   > def exportedPromise := <elib:ref.makeProxy>(
+x   >   def handler {
+x   >     match [=="handleSendOnly", [=="CapTP__whenMoreResolved", [reactor]]] {
+x   >       wmrs with= reactor
+x   >     }
+x   >     match msg { stderr.println(msg) }},
+x   >   resolution,
+x   >   false)
+x   > jsRef.sendOnly(outgoingConnection.nonceLocator(), "newRemotePromiseDescTest", [exportedPromise])
+x   ? expect()
+x   # stdout: DeliverOnly(0, "newRemotePromiseDescTest", [NewRemotePromiseDesc(1, -1, 10000001)])
+x   #         
+x   
+x   # stderr: ["handleOptSealedDispatch", [CapTP far ref's remote incomingPos]]
+x   #         ["handleOptSealedDispatch", [otherConnProxy]]
+x   #         
+x 
+x The resolution must be delivered to the redirector even if it's a promise, to allow for promise shortening; in other words, it must be whenMoreResolved and not whenResolved.
+x 
+x   ? def anotherPromise
+x   > bind resolution := __makeFinalSlot(anotherPromise); null
+x   > for r in wmrs { jsRef.sendOnly(r, "run", [anotherPromise]) }
+x   ? expect()
+x   # stdout: DeliverOnly(-1, "run", [NewRemotePromiseDesc(2, -2, 10000002)])
+x   #         
+x 
+x XXX if the answer to http://www.eros-os.org/pipermail/e-lang/2007-September/012219.html is local promises should invoke reactors, then we can get rid of using proxies for this test.
+x 
+x (Yes, it is correct that the third argument isn't a hash. It's direct from entropy.nextSwiss(), and is a SwissBase, the authority to *be* an object (as seen from outside some vat).)
+x 
+x XXX test properties of the identity of the redirector passed to exportedPromise <- __whenMoreResolved, and that if re-imported it is still good
+x 
+x XXX test that index 1 delivers to the promise
+x 
+x --- Outgoing ImportDesc ---
+x 
+x See NewFarDesc above for testing of ordinary imports; this is the special NonceLocator case.
+x 
+x   XXX write this test
+x 
+x --- Outgoing IncomingDesc ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x IncomingDesc for the nonce locator (magic index 0)
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "incomingNonceLocatorTest", [outgoingConnection.nonceLocator()])
+x   ? expect()
+x   # stdout: DeliverOnly(0, "incomingNonceLocatorTest", [IncomingDesc(0)])
+x   #         
+x 
+x IncomingDesc for an export
+x 
+x   ? def outgoing := jsRef.send(outgoingConnection.nonceLocator(), "willBeFar", []); null
+x   ? expect()
+x   # stdout: Deliver(-1, NewFarDesc(1, makeSwiss("\u0000\bF\u00ff\u000e~G\t\u001a/\u0085\u007f\u007f\u00da\u00d6C\u00b2\u00b8\u008dE\u00c1")), 0, "willBeFar", [])
+x   #         
+x   ? receiver.DeliverOnly(1, "run", buildIn([descs.NewFar(1, makeSwiss(398427908325834))]))
+x   # value: <JS undefined>
+x   
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "incomingFarTest", [outgoing])
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(0, "incomingFarTest", [IncomingDesc(1)])
+x   #         
+x 
+x IncomingDesc for an answer
+x 
+x   ? def outgoing := jsRef.send(outgoingConnection.nonceLocator(), "willBePromise", []); null
+x   ? expect()
+x   # stdout: Deliver(-2, NewFarDesc(2, makeSwiss("\u0000\u00b5\u001a?a\u00e7*\u009f\u00c7\u0001\u00ff\u00dc\u00fb\u0092\u0003\u00a6\u0015\u00ae\u00e5>m")), 0, "willBePromise", [])
+x   #         
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "incomingAnswerTest", [outgoing])
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(0, "incomingAnswerTest", [IncomingDesc(-2)])
+x   #         
+x 
+x --- Outgoing Promise3Desc ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x   
+x   ? def otherConnPromise := jsRef.makeProxy( throw("XXX needs js conversion")
+x   >   def handler {
+x   >     to handleOptSealedDispatch(brand) {
+x   >       if (brand == otherConnProxyBrand) {
+x   >         def nonce := 893921618639987
+x   >         return otherConnProxySealer.seal(fn recipID {[["otherSP"], "otherID", nonce, makeVine(otherConnPromise)]})
+x   >       } else { return jsnull }
+x   >     }
+x   >     to handleSendOnly(_, _) {}
+x   >     to handleSend(_, _) {}
+x   >   },
+x   >   jsRef.promise()["promise"],
+x   >   false)
+x   # value: <Promise>
+x   
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "introduction", [otherConnPromise])
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(0, "introduction", [Promise3Desc(["otherSP"], "otherID", 893921618639987, NewFarDesc(1, makeSwiss("\u0000\bF\u00ff\u000e~G\t\u001a/\u0085\u007f\u007f\u00da\u00d6C\u00b2\u00b8\u008dE\u00c1")))])
+x   #         
+x 
+x Until WormholeOp, Far refs are also sent using Promise3Desc.
+x 
+x   ? def otherConnFar := <elib:ref.makeProxy>( throw("XXX needs JS conversio")
+x   >   handler,
+x   >   jsRef.promise()["promise"],
+x   >   true)
+x   # value: <Far ref>
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "introduction", [otherConnFar])
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(0, "introduction", [Promise3Desc(["otherSP"], "otherID", 893921618639987, NewFarDesc(2, makeSwiss("\u0000\u00b5\u001a?a\u00e7*\u009f\u00c7\u0001\u00ff\u00dc\u00fb\u0092\u0003\u00a6\u0015\u00ae\u00e5>m")))])
+x   #         
+x 
+x --- Outgoing Far3Desc ---
+x XXX
+x 
+x ------ Serialization ------
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "setupIncoming", [println])
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(0, "setupIncoming", [NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))])
+x   #         
+x 
+x --- Disconnected ref ---
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "s", [Ref.broken("b")])
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(0, "s", [Ref.broken(cajita.construct(Error, ["b"]))])
+x   #         
+x 
+x   ? receiver.DeliverOnly(1, "run", buildIn([Ref.broken("b")]))
+x   # stdout: [Broken: Error: b]
+x   #         
+x 
+x --- LocatorUnum ---
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "s", [locatorUnumLocal])
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(0, "s", [CapTP_1_locatorUnum])
+x   #         
+x 
+x   ? receiver.DeliverOnly(1, "run", buildIn([locatorUnumRemote]))
+x   # stdout: <locatorUnumLocal>
+x   #         
+x 
+x 
+x XXX write more serialization tests
+x 
+x ------ Other ------
+x 
+x --- Being Carol ---
+x 
+x At the sending side in a 3-vat introduction, the proxy for the passed far ref must amplify to the data for a Promise3Desc or Far3Desc, so that other connections can pass it as such.
+x 
+x This includes making an entry in the promise gift table[?] for the generated nonce.
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x   
+x   ? def eventualRef := jsRef.send(outgoingConnection.nonceLocator(), "eventualForPassTest", [])
+x   # value: [Caja-CapTP Promise]
+x   ? expect()
+x   # stdout: Deliver(-1, NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`")), 0, "eventualForPassTest", [])
+x   #         
+x 
+x   ? hub.amplifyFor3Desc(eventualRef, "recipID")
+x   # value: [["tRemoteSearchPath"], "tRemoteVatID", 10000002, [Vine]]
+x   
+x   ? expect()
+x   # stdout: Deliver(-2, NewFarDesc(2, makeSwiss("\u0000\bF\u00ff\u000e~G\t\u001a/\u0085\u007f\u007f\u00da\u00d6C\u00b2\u00b8\u008dE\u00c1")), 0, "provideFor", [IncomingDesc(-1), "recipID", 10000002])
+x   #         
+x 
+x --- outgoingConnection.nonceLocator() ref ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "foo", [])
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(0, "foo", [])
+x   #         
+x 
+x --- Peer facets and gift tables ---
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x Access
+x   
+x   ? peerConnection.nonceLocator() == outgoingConnection.nonceLocator()
+x   # value: true
+x   
+x   ? def pgt := peerConnection.getPromiseGiftTable()
+x   # value: <promiseGiftTable>
+x 
+x   ? def ngt := peerConnection.getNearGiftTable()
+x   # value: <nearGiftTable>
+x 
+x Use of PromiseGiftTable
+x 
+x   ? receiver.DeliverOnly(0, "provideFor", buildIn(["gift1", "tPGTRecID", 346718905]))
+x   # value: <JS undefined>
+x   
+x   ? pgt.acceptFor("tPGTRecID", 346718905)
+x   # value: "gift1"
+x 
+x Use of NearGiftTable
+x 
+x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "exporting", [js.asFunction(println)])
+x   # value: <JS undefined>
+x   
+x   ? expect()
+x   # stdout: DeliverOnly(0, "exporting", [NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))])
+x   #         
+x 
+x   ? receiver.DeliverOnly(0, "provideFor", buildIn([descs.Incoming(1), "tPGTRecID", 346718905, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`")]))
+x   # value: <JS undefined>
+x   
+x   ? ngt.acceptFor("tPGTRecID", 346718905, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))
+x   # value: <println>
+x 
+x XXX review whether the full tables (vs. smaller facets of them) should be exposed to peers.
+x 
+x NonceLocator#acceptFrom
+x 
+x   ? otherPromiseGiftTable.provideFor(println, "tRemoteVatID", 472938)
+x   > receiver.Deliver(-1, buildIn(null), 0, "acceptFrom", buildIn([[], "tAFDonorID", 472938, null]))
+x   > receiver.DeliverOnly(-1, "run", buildIn(["got promise gift"]))
+x   # value: <JS undefined>
+x   
+x   # stdout: hub.get([], "tAFDonorID")
+x   #         
+x   
+x   ? expect()
+x   # stdout: got promise gift
+x   #         
+x 
+x   ? otherNearGiftTable.provideFor(println, "tRemoteVatID", 673563245, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"))
+x   > receiver.Deliver(-2, buildIn(null), 0, "acceptFrom", buildIn([[], "tAFDonorID", 673563245, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`"), null]))
+x   > receiver.DeliverOnly(-2, "run", buildIn(["got near gift"]))
+x   # value: <JS undefined>
+x   
+x   # stdout: hub.get([], "tAFDonorID")
+x   #         
+x   
+x   ? expect()
+x   # stdout: got near gift
+x   #         
+x 
+x --- Reuse of builders ---
+x 
+x This is prohibited because the timing and reoccurrence of unserialization operations affects the results and the state of the comm tables.
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x   ? def builder
+x   > receiver.DeliverOnly(0, "__getAllegedType", fn bind builder { testGraphRecognizer.recognize([], builder) })
+x   ? builder.buildImport("CapTP_1_descs")
+x   # problem: Error: this CapTP argument builder is no longer valid
+x 
+x --- Outgoing __whenMoreResolved ---
+x 
+x If a remote promise proxy receives a __whenMoreResolved where the reactor is a proxy for another connection, then instead of forwarding the message, it delivers itself to the reactor. This creates the opportunity for the promise to be serialized as a Promise3Desc, triggering 3-vat shortening.
+x 
+x   ? clearFinalizers()
+x 
+x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+x 
+x   ? def otherConnReactor := <elib:ref.makeProxy>( throw("XXX needs JS conversion")
+x   >   def handler {
+x   >     to handleOptSealedDispatch(brand) {
+x   >       if (brand == otherConnProxyBrand) {
+x   >         def nonce := 483853534795
+x   >         return otherConnProxySealer.seal(fn recipID {[["otherSP"], "otherID", nonce, makeVine(otherConnReactor)]})
+x   >       }
+x   >     }
+x   >     match msg { stderr.println(msg) }
+x   >   },
+x   >   jsRef.promise()["promise"],
+x   >   true)
+x   # value: <Far ref>
+x   
+x   ? def someRemotePromise := jsRef.send(outgoingConnection.nonceLocator(), "wmrTest", [])
+x   # value: <Promise>
+x   
+x   ? expect()
+x   # stdout: Deliver(-1, NewFarDesc(1, makeSwiss("\u0000B\u00ecb@\u00e5\u00e2\u00eb;\u00e82`\u0099Z\u00dc.\u00cc\u00c6e\u00fc`")
+x   ), 0, "wmrTest", [])
+x   #         
+x 
+x In order to check for a particular refcount bug, the promise must be an import rather than a question.
+x 
+x   ? receiver.DeliverOnly(1, "run", buildIn([descs.NewRemotePromise(1, -1, def remotePromiseRdrBase := 23897893247)]))
+x   # value: <JS undefined>
+x   
+x   ? jsRef.sendOnly(someRemotePromise, "CapTP__whenMoreResolved", [otherConnReactor])
+x   # value: <JS undefined>
+x   
+x   ?
+x   # stderr: ["handleSendOnly", ["run", [<Promise>]]]
+x   #         
+x   
+x Bug test: the self-reference in __whenMoreResolved was being treated like an arriving reference and increasing the wire-count, resulting in this wire count being 2 rather than 1.
+x   ? runFinalizers()
+x   ? expect(); expect()
+x   # stdout: GCAnswer(-1)
+x   #         GCExport(1, 1)
+x   #         
+x 
+x --- Replay attacks on outgoing encoding ---
+x 
+x Unfortunately, there is no way to test this at the moment. The potential problem is: if the __optSealedDispatch responses of a proxy are replayed after the proxy is GCed, can the CapTP system be fooled into presenting an invalid (or reused for an unrelated object) position to the remote side?
+x 
+x The solution is to retain the proxy in the sealed box, so the position cannot have been GCed. (Revoking the box is not acceptable as this would allow the replayer to discover whether the remote reference has been GCed.)
+x 
+x If this mechanism also checks, when amplifying the proxy, that the proxy in the box is the same as the proxy sealed-dispatch was performed on, then it would be possible to test that the check happens, and therefore that the proxy is in the box, but remote promise proxies do not currently have the sameness they should, so this check cannot be done yet.
+x 
+x XXX fix this, write the test
+x 
