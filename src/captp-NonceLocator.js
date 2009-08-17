@@ -97,7 +97,7 @@ function NonceLocator(myPGifts, myNGifts, myOwnID, myHub, mySwissTable) {
       //which is as it should be.
       var id = mySwissTable.getIdentity(result);
       var idHash = Swiss.hash(id);
-      if (!idHash.equals(swissHash)) {
+      if (!Swiss.same(idHash, swissHash)) {
         throw new Error("internal: hash mismatch: " + swissHash);
       }
       return result;
