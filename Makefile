@@ -14,6 +14,7 @@ lib: src/everything.out.js
 tests: \
    test/test-util.out.js \
    test/call-uncall.live.xhtml \
+   test/captp-connection.live.xhtml \
    test/captp-objects.live.xhtml \
    test/captp-trace.live.xhtml \
    test/datae.live.xhtml \
@@ -28,6 +29,7 @@ test: all
 
 # -----------------------------------------------------------------------------
 
+# NOTE: This list determines the runtime load order and import relationships, which is important.
 src/everything.out.js: \
    src/_header.js \
    src/authorizer.js \
@@ -40,6 +42,7 @@ src/everything.out.js: \
    src/Surgeon.out.js \
    src/captp.out.js \
    src/captp-NonceLocator.out.js \
+   src/captp-connection.out.js \
    src/_footer.js
 	cat $^ > "$@"
 

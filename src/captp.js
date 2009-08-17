@@ -788,14 +788,6 @@ function LocatorUnum() {
   });
 }
 
-
-function CapTPConnection() {
-  /// XXX fill out
-  return cajita.freeze({
-    toString: function () { return '<CapTPConnection>'; }
-  });
-}
-
 var traceMessages = (function () {
 
   // This is a Data-E kit used as a value-rather-than-Data-E-protocol intermediate representation; the particular kit used is arbitrary

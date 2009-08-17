@@ -23,3 +23,7 @@ In this source tree:
 Elsewhere:
 
   See <http://code.google.com/p/caja-captp/w/list>.
+
+--- Immediate TODO list:
+
+Uncomment some tests in captp-connection and make them pass.
