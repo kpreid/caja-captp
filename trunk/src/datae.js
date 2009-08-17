@@ -347,8 +347,11 @@ var deJavaScriptKit = (function () {
 
         // XXX handle non-dot verbs.
         buildCall: function (rec, verb, args) {
-          if (rec === "builtinsMaker" && verb === "frozenArray") { // prettiness kludge
+          // Note that these substitutions is only sound under certain assumptions about the environment... Should be parameterizable, at least to turn them off.
+          if (rec === "DataE_JS1_builtinsMaker" && verb === "frozenArray") {
             return "cajita.freeze([" + args.join(", ") + "])";
+          } else if (rec === "cajita" && verb === "readPub" && args.length == 2) {
+            return "(" + args[0] + ")[" + args[1] + "]";
           } else {
             return rec + "." + verb + "(" + args.join(", ") + ")";
           }

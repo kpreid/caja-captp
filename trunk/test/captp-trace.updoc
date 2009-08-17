@@ -59,7 +59,7 @@ Utility for producing traces of CapTP communication.
   ? ctrace.DeliverOnly(0, "foo",
   >   once(js.asFunction(fn b {
   >     b.buildRoot(b.buildCall(
-  >       b.buildImport("builtinsMaker"),
+  >       b.buildImport("DataE_JS1_builtinsMaker"),
   >       "frozenArray",
   >       [b.buildAtom("bar"),
   >        b.buildCall(b.buildImport("CapTP_1_descs"),
