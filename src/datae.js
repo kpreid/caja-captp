@@ -164,6 +164,11 @@ var deJSONTreeKit = (function () {
 
 var deSubgraphKit = (function () {
 
+  function isRecognizeAtom(obj) {
+    var t = typeof(obj);
+    return t==="number" || t==="string" || t==="undefined" || t==="boolean" || obj===null;
+  }
+
   function subgraphAtomType(x) {
     return true;
   }
@@ -266,7 +271,7 @@ var deSubgraphKit = (function () {
               seen.set(obj, promIndex);
               
               var node; // Will hold the Data-E portrayal of the object
-              if (atomType(obj)) {
+              if (isRecognizeAtom(obj) && atomType(obj)) {
                 // *** The object is an atom.
                 node = builder.buildAtom(obj);
               } else {
