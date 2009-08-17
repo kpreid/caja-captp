@@ -81,7 +81,7 @@ var parameterTypes = cajita.freeze({
   MsgCount: MsgCountT,
   MsgName: MsgNameT,
   Obj: T.AnyT,
-  WireDeltaT: WireDeltaT,
+  WireDeltaT: WireDeltaT
 });
 
 // Produce a data structure describing the structure of CapTP messages.

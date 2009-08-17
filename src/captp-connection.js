@@ -194,7 +194,7 @@ function CapTPConnection(outgoingReceiver, swissTable, locatorUnum, whenGarbage,
   
   /** given an index from an incoming message, look up the corresponding local object */
   function lookupIncoming(index) {
-    index = IntT.coerce(index);
+    index = IncomingPosT.coerce(index);
     if (index === 0) {
       return nonceLocator;
     } else if (index < 0) {
@@ -205,7 +205,7 @@ function CapTPConnection(outgoingReceiver, swissTable, locatorUnum, whenGarbage,
   }
 
   function lookupImport(index) {
-    index = IntT.coerce(index);
+    index = ImportPosT.coerce(index);
     if (index === 0) {
       return remoteNonceLocatorRecord.receivedReference();
     } else if (index < 0) {
@@ -383,7 +383,7 @@ function CapTPConnection(outgoingReceiver, swissTable, locatorUnum, whenGarbage,
   var incomingDescMaker = cajita.freeze({
     NewFar: function (importPos, swissHash) {
       importPos = ImportPosT.coerce(importPos);
-      swissHash = SwissT.coerce(swissHash);
+      swissHash = Swiss.T.coerce(swissHash);
       requireLive();
 
       imports.set(importPos, ProxyRecord(true, importPos));
@@ -394,7 +394,7 @@ function CapTPConnection(outgoingReceiver, swissTable, locatorUnum, whenGarbage,
     NewRemotePromise: function (importPos, rdrPos, rdrBase) {
       importPos = ImportPosT.coerce(importPos);
       rdrPos = AnswerPosT.coerce(rdrPos);
-      rdrBase = SwissT.coerce(rdrBase);
+      rdrBase = Swiss.T.coerce(rdrBase);
       requireLive();
       
       var record = ProxyRecord(false, importPos);
