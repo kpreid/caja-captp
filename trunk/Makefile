@@ -17,6 +17,7 @@ tests: \
    test/captp-objects.live.xhtml \
    test/captp-trace.live.xhtml \
    test/datae.live.xhtml \
+   test/guards.live.xhtml \
    test/proxy.live.xhtml \
    test/ref.live.xhtml \
    test/surgeon.live.xhtml \
@@ -30,6 +31,7 @@ test: all
 src/everything.out.js: \
    src/_header.js \
    src/authorizer.js \
+   src/guards.out.js \
    src/util.out.js \
    src/sha1.out.js \
    src/ref.out.js \
