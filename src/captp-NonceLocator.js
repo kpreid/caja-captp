@@ -13,11 +13,11 @@
  * @author Kevin Reid, after Mark S. Miller's Java code from E-on-Java
  */
 function NonceLocator(myPGifts, myNGifts, myOwnID, myHub, mySwissTable) {
-  //PromiseGiftTable.enforce(myPGifts);
-  //NearGiftTable.enforce(myNGifts);
-  VatID.enforce(myOwnID);
-  //PeerHub.enforce(myHub);
-  //SwissTable.enforce(mySwissTable);
+  //myPGifts = PromiseGiftTableT.coerce(myPGifts);
+  //myNGifts = NearGiftTableT.coerce(myNGifts);
+  myOwnID = VatID.T.coerce(myOwnID);
+  //myHub = PeerHubT.coerce(myHub);
+  //mySwissTable = SwissTableT.coerce(mySwissTable);
 
   return cajita.freeze({
     toString: function () {
@@ -25,15 +25,15 @@ function NonceLocator(myPGifts, myNGifts, myOwnID, myHub, mySwissTable) {
     },
     
     provideFor: function (gift, recipID, nonce) {
-      VatID.enforce(recipID);
-      Nonce.enforce(nonce);
+      recipID = VatID.T.coerce(recipID);
+      nonce = NonceT.coerce(nonce);
       return myPGifts.provideFor(gift, recipID, nonce);
     },
 
     provideFor: function (gift, recipID, nonce, swissHash) {
-      VatID.enforce(recipID);
-      Nonce.enforce(nonce);
-      Swiss.enforce(swissHash);
+      recipID = VatID.T.coerce(recipID);
+      nonce = NonceT.coerce(nonce);
+      swissHash = Swiss.T.coerce(swissHash);
       
       cajita.enforce(Ref.isNear(gift), "Must be Near: ", gift);
       //If gift isn't Selfish, this will throw an exception,
@@ -53,9 +53,9 @@ function NonceLocator(myPGifts, myNGifts, myOwnID, myHub, mySwissTable) {
      *                   prevent it from being gced.
      */
     acceptFrom: function (donorPath, donorID, nonce, optFarVine) {
-      SearchPath.enforce(donorPath);
-      VatID.enforce(donorID);
-      Nonce.enforce(nonce);
+      donorPath = SearchPathT.coerce(donorPath);
+      donorID = VatID.T.coerce(donorID);
+      nonce = NonceT.coerce(nonce);
       
       var optDonorConn = myHub.get(donorPath, donorID);
       // XXX hub.get can never yield null -- what was the old-CapTP situation in which this could occur?
@@ -78,10 +78,10 @@ function NonceLocator(myPGifts, myNGifts, myOwnID, myHub, mySwissTable) {
      *                   prevent it from being gced.
      */
     acceptFrom: function (donorPath, donorID, nonce, swissHash, optFarVine) {
-      SearchPath.enforce(donorPath);
-      VatID.enforce(donorID);
-      Nonce.enforce(nonce);
-      Swiss.enforce(swissHash);
+      donorPath = SearchPathT.coerce(donorPath);
+      donorID = VatID.T.coerce(donorID);
+      nonce = NonceT.coerce(nonce);
+      swissHash = Swiss.T.coerce(swissHash);
                   
       var optDonorConn = myHub.get(donorPath, donorID);
       // XXX hub.get can never yield null -- what was the old-CapTP situation in which this could occur?
@@ -115,7 +115,7 @@ function NonceLocator(myPGifts, myNGifts, myOwnID, myHub, mySwissTable) {
      *
      */
     lookupSwiss: function (swissNum, optFarVine) {
-      Swiss.enforce(swissNum);
+      swissNum = Swiss.T.coerce(swissNum);
       
       return mySwissTable.lookupSwiss(swissNum);
     },

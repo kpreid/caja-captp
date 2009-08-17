@@ -1,0 +1,101 @@
+# Copyright 2007-2009 Kevin Reid, under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+-------------------------------------------------------------------------------
+The following code is boilerplate to load a Cajita module with collecting the return value. This code should be folded into some Cajita or EoJS library.
+
+  ? def js := <import:org.erights.eojs.jsTools>; null
+
+  ? def cajita := <import:org.erights.eojs.cajita>; null
+  ? def cajitaEnv := <import:org.erights.eojs.cajitaEnv>; null
+
+  ? def exports; null
+  
+  ? def oldNewModuleHandler := cajitaPriv.getNewModuleHandler()
+  > def loadAndWait(url) {
+  >   def value
+  >   cajitaPriv.setNewModuleHandler(js.asObject([
+  >     "handle" => js.asFunction(fn newModule {
+  >       cajitaPriv.setNewModuleHandler(oldNewModuleHandler)
+  >       bind value := newModule.instantiate(cajitaPriv.get___(), oldNewModuleHandler.getImports())
+  >     })
+  >   ]))
+  >   EoJS.asyncLoad(url)
+  >   interp.waitAtTop(value)
+  >   return value
+  > }
+  > null
+  
+  ? def exports := loadAndWait("../src/everything.out.js"); null
+  ? def testutil := loadAndWait("test-util.out.js"); null
+  
+  ? interp.waitAtTop(exports)
+
+-------------------------------------------------------------------------------
+
+These tests do *not*, as yet, check for proper use of ejectors.
+
+  ? def T := exports["T"]
+  # value: T
+
+String guard
+
+  ? def stringT := T["stringT"]
+  # value: T.stringT
+  
+  ? stringT.coerce(0)
+  # problem: Error: Not accepted by T.stringT
+
+  ? stringT.coerce("t")
+  # value: "t"
+
+Integer guards: constructing and printing
+
+  ? def int32T := T["int32T"]
+  # value: T.int32T
+  
+  ? def uint32T := T["uint32T"]
+  # value: T.uint32T
+  
+  ? int32T.atLeast(1)
+  # value: T.int32T.atLeast(1)
+  
+  ? int32T.atLeast(1).atLeast(2)
+  # value: T.int32T.atLeast(2)
+  
+  ? int32T.atLeast(2).atLeast(1)
+  # value: T.int32T.atLeast(2)
+  
+  ? int32T.atLeast(2).atMost(3)
+  # value: T.int32T.atLeast(2).atMost(3)
+  
+  ? uint32T.atLeast(1)
+  # value: T.uint32T.atLeast(1)
+  
+  ? uint32T.atMost(2**32-3)
+  # value: T.uint32T.below(4294967294)
+  
+  ? uint32T.atLeast(1).atMost(3)
+  # value: T.int32T.atLeast(1).atMost(3)
+
+Integer guards, actual use  
+  
+  ? int32T.coerce(0)
+  # value: 0
+  
+  ? int32T.coerce(-1)
+  # value: -1
+  
+  ? int32T.coerce(0.1)
+  # problem: Error: Not accepted by T.int32T
+  
+  ? uint32T.coerce(2**31)
+  # value: 2147483648
+  
+  ? int32T.above(0).coerce(0)
+  # problem: Error: Not accepted by T.int32T.atLeast(1)
+
+  ? int32T.above(0).coerce(1)
+  # value: 1
+  
+  XXX incomplete and hurried tests. Be more thorough, test the actual boundary conditions (around 0, around plus and minus 2^32, 2^31)

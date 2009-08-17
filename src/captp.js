@@ -15,13 +15,14 @@ var entropy = cajita.freeze({
   }
 });
 
-var VatID = cajita.freeze({ enforce: function (v) { cajita.enforceType(v, "string"); } });
+var VatID = cajita.freeze({T: T.stringT});
 
 // In E implementations SwissNumbers are long integers. JavaScript does not have long integers. So we use strings of character codes <256 denoting octets instead.
 // This wrapper provides the operations on it and also ensures that the bits are not leaked in an exception etc. by toString.
+var isSwiss = cajita.newTable(true);
 function Swiss(value) {
   cajita.enforceType(value, "string"); // XXX does not check details
-  return cajita.freeze({
+  var swiss = cajita.freeze({
     // The function used to hash SwissBase->SwissNumber->SwissHash.
     hash: function () {
       return new Swiss(str_sha1(value));
@@ -41,13 +42,21 @@ function Swiss(value) {
       return portrayCall(Swiss, [value]);
     }
   });
+  isSwiss.set(swiss, true);
+  return swiss;
 }
-Swiss.enforce = function (value) {
-  // XXX This is unlike other 'enforce' in that it is not an assertion; fix and review usage
-  return new Swiss(value.bits);
-};
+Swiss.T = cajita.freeze({
+  toString: function () { return "" + Swiss + ".T"; },
+  coerce: function (specimen, ejector) {
+    if (isSwiss.get(specimen)) {
+      return specimen;
+    } else {
+      T.fail(specimen, Swiss.T, ejector);
+    }
+  }
+});
 Swiss.same = function (s1, s2) {
-  return Swiss.enforce(s1).bits === Swiss.enforce(s2).bits;
+  return Swiss.T.coerce(s1).bits === Swiss.T.coerce(s2).bits;
 };
 
 // Produce a data structure describing the structure of CapTP messages.
@@ -70,6 +79,8 @@ function makeWeakValueMap() {
   // XXX This does not produce even an approximation of a weak value map. Furthermore, cajita.newTable is moving to weak-key-table exclusively when possible; we need our own strategy.
   return cajita.newTable(false);
 }
+
+var IndexT = T.uint32T.above(0);
 
 var CommTableMixin = (function () {
   // The code within this block is derived, by way of the E-on-CL CapTP 
@@ -146,10 +157,7 @@ var CommTableMixin = (function () {
        * What the next capacity big enough to represent index?
        */
       var bigEnough = function (index) {
-          cajita.enforceNat(index);
-          if (0 >= index) {
-              throw new Error("bad index: " + index);
-          }
+          index = IndexT.coerce(index);
           var result = myCapacity;
           while (index >= result) {
               //XXX it's stupid to have an iterative algorithm. How do I
@@ -165,7 +173,7 @@ var CommTableMixin = (function () {
        * Newly added elements are on the (newly grown) free list.
        */
       var growToHold = function (index) {
-          cajita.enforceNat(index);
+          index = IndexT.coerce(index);
           var oldCapacity = myCapacity;
           myCapacity = bigEnough(index);
           if (oldCapacity === myCapacity) {
@@ -210,8 +218,7 @@ var CommTableMixin = (function () {
        * beginning, it's not valid, so no.
        */
       self.isFree = function (index) {
-          cajita.enforceNat(index);
-          // XXX reject zero
+          index = IndexT.coerce(index);
           return index >= myCapacity || 0 >= myFreeList[index];
       };
 
@@ -219,8 +226,7 @@ var CommTableMixin = (function () {
        * Complain if not free
        */
       self.mustBeFree = function (index) {
-          cajita.enforceNat(index);
-          // XXX reject zero
+          index = IndexT.coerce(index);
           if (!self.isFree(index)) {
               throw new Error("" + index + " not free in " + self);
           }
@@ -230,8 +236,7 @@ var CommTableMixin = (function () {
        * Complain if not allocated
        */
       self.mustBeAlloced = function (index) {
-          cajita.enforceNat(index);
-          // XXX reject zero
+          index = IndexT.coerce(index);
           if (self.isFree(index)) {
               throw new Error("" + index + " not alloced in " + self);
           }
@@ -244,8 +249,7 @@ var CommTableMixin = (function () {
        * arrays.
        */
       self.free = function (index) {
-          cajita.enforceNat(index);
-          // XXX reject zero
+          index = IndexT.coerce(index);
 
           self.mustBeAlloced(index);
           myFreeList[index] = myFreeHead;
@@ -260,8 +264,7 @@ var CommTableMixin = (function () {
        * index must already be allocated
        */
       self.incr = function (index) {
-          cajita.enforceNat(index);
-          // XXX reject zero
+          index = IndexT.coerce(index);
           
           self.mustBeAlloced(index);
           myFreeList[index] += 1;
@@ -276,9 +279,8 @@ var CommTableMixin = (function () {
        * @return whether the entry got freed
        */
       self.decr = function (index, delta) {
-          cajita.enforceNat(index);
-          // XXX reject zero
-          cajita.enforceNat(delta);
+          index = IndexT.coerce(index);
+          delta = T.uint32T.coerce(delta); // XXX review, this was originally not constrained to be nonnegative.
 
           self.mustBeAlloced(index);
           var newCount = myFreeList[index] - delta;
@@ -302,8 +304,7 @@ var CommTableMixin = (function () {
        * allocated, so we need merely assure that this case is constant time.
        */
       self.alloc = function (index) {
-          cajita.enforceNat(index);
-          // XXX reject zero
+          index = IndexT.coerce(index);
 
           self.mustBeFree(index);
           growToHold(index);
@@ -334,8 +335,7 @@ var CommTableMixin = (function () {
        * Gets the object at the allocated index.
        */
       self.get = function (index) {
-          cajita.enforceNat(index);
-          // XXX reject zero
+          index = IndexT.coerce(index);
 
           self.mustBeAlloced(index);
           var result = myStuff[index];
@@ -351,8 +351,7 @@ var CommTableMixin = (function () {
       self.set = function (index, value, strict) {
           if (strict === undefined) strict = false;
           cajita.enforceType(strict, "boolean");
-          cajita.enforceNat(index);
-          // XXX reject zero
+          index = IndexT.coerce(index);
 
           if (self.isFree(index)) {
               self.alloc(index);
@@ -467,7 +466,7 @@ function SwissTable() {
      * designates undefined.)    // XXX caja-captp: Is using undefined as the special value important?
      */
     "lookupSwiss": function (swissNum) {
-      Swiss.enforce(swissNum);
+      swissNum = Swiss.T.coerce(swissNum);
       if (0 === swissNum) {
           //Since Weak*Maps can't handle nulls, we handle it ourselves. <- caja-captp: This is an inherited comment.
           return undefined;
@@ -589,7 +588,7 @@ function SwissTable() {
      * exception is thrown.
      */
     "registerIdentity": function (obj, swissBase) {
-      Swiss.enforce(swissBase);
+      swissBase = Swiss.T.coerce(swissBase);
       obj = Ref.resolution(obj);
       if (!Ref.isSelfish(obj)) {
           throw new Error("Not Selfish: " + obj);
@@ -620,7 +619,7 @@ function SwissTable() {
      * (since we assume its infeasible to find the archash of zero).
      */
     registerNewSwiss: function (ref, swissBase) {
-        Swiss.enforceSwiss(swissBase);
+        swissBase = Swiss.T.coerce(swissBase);
         ref = Ref.resolution(ref);
         var result = swissBase.hash();
         if (undefined === ref) {
@@ -692,8 +691,7 @@ function ExportsTable() {
   // * Frees the index, including its entry, if any, in the pbp map.
   // */
   //self.free = function (index) {
-  //    cajita.enforceNat(index);
-  //    // XXX reject zero
+  //    index = IndexT.coerce(index);
   //    
   //    myPBPMap.removeKey(exportsTable[index]);
   //    ancestor.free(index);
