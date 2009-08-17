@@ -352,16 +352,33 @@ var Ref = cajita.freeze({
   
   /** http://wiki.erights.org/wiki/Object_Ref#isSettled.2F1 */
   isSettled: function (ref) {
-    // XXX isSettled,isSelfish need revision once we have passbycopy objects (if we do at all).
+    // XXX isSettled,isSelfish,isPBC need revision once we have passbycopy objects (if we do at all).
     return getRefImpl(ref).isResolved();
+  },
+
+  /** Tests whether an object is pass-by-construction (rather than pass-by-proxy).
+      http://wiki.erights.org/wiki/PassByConstruction
+      http://wiki.erights.org/wiki/Object_Ref#isPBC.2F1 */
+  // XXX In need of testing. Also, should have a way for user-created objects to be declared pass-by-construction
+  isPBC: function (ref) {
+    // XXX isSettled,isSelfish,isPBC need revision once we have passbycopy objects (if we do at all).
+    var t = typeof(ref);
+    return cajita.isArray(ref) || (t==="number" || t==="string" || t==="undefined" || t==="boolean" || ref===null || ref===undefined);
+  },
+
+  /** http://wiki.erights.org/wiki/PassByCopy
+      http://wiki.erights.org/wiki/Object_Ref#isPassByCopy.2F1 */
+  // XXX In need of testing.
+  isPassByCopy: function (ref) {
+    return Ref.isPBC(ref) && !Ref.isSelfish(ref);
   },
 
   /** http://wiki.erights.org/wiki/Object_Ref#isSelfish.2F1 */
   isSelfish: function (ref) {
-    // XXX isSettled,isSelfish need revision once we have passbycopy objects (if we do at all).
+    // XXX isSettled,isSelfish,isPBC need revision once we have passbycopy objects (if we do at all).
     var t = typeof(ref);
     // XXX this defn. should come from elsewhere, match up with Data-E
-    return !(t==="number" || t==="string" || t==="undefined" || t==="boolean" || ref===null);
+    return !(t==="number" || t==="string" || t==="undefined" || t==="boolean" || ref===null || ref===undefined);
   },
   
   /** Essentially equivalent to Ref.resolution(ref)[verb].apply(Ref.resolution(ref), args), but with a nicer error if the ref is unresolved, throws the problem of a broken reference, and also implements Miranda messages (when-resolved and when-broken).
