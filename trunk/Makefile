@@ -13,12 +13,12 @@ lib: src/everything.out.js
 
 tests: \
    test/test-util.out.js \
-   test/ref.live.xhtml \
-   test/proxy.live.xhtml \
    test/call-uncall.live.xhtml \
    test/captp-objects.live.xhtml \
    test/captp-trace.live.xhtml \
    test/datae.live.xhtml \
+   test/proxy.live.xhtml \
+   test/ref.live.xhtml \
    test/surgeon.live.xhtml \
    test/SwissTable.live.xhtml
 
