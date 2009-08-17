@@ -29,10 +29,6 @@ function Swiss(value) {
     
     bits: value,
 
-    equals: function (other) {
-      return value === Swiss.enforce(other).bits;
-    },
-
     showBits: function () {
       return binb2hex(str2binb(value));
     },
@@ -49,6 +45,9 @@ function Swiss(value) {
 Swiss.enforce = function (value) {
   // XXX This is unlike other 'enforce' in that it is not an assertion; fix and review usage
   return new Swiss(value.bits);
+};
+Swiss.same = function (s1, s2) {
+  return Swiss.enforce(s1).bits === Swiss.enforce(s2).bits;
 };
 
 // Produce a data structure describing the structure of CapTP messages.
