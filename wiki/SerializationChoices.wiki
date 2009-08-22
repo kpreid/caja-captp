@@ -15,4 +15,4 @@ The env used by CapTP is the `defaultEnv` plus the [http://wiki.erights.org/wiki
 
 XXX write the rest of this info.
 
-In CapTP, an object marked PassByConstruction (XXX explain how this happens), if it does not have a CapTP__optUncall method, is serialized as a record, i.e. the collection of its properties.
+In CapTP, an object marked PassByConstruction (XXX explain how this happens), if it does not have a {{{CapTP__optUncall}}} method, is serialized as a record, i.e. the collection of its properties.
