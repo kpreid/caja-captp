@@ -727,16 +727,16 @@ function ExportsTable() {
   //    myPBPMap = null;
   //};
   //
-  ///**
-  // * Frees the index, including its entry, if any, in the pbp map.
-  // */
-  //self.free = function (index) {
-  //    index = IndexT.coerce(index);
-  //    
-  //    myPBPMap.removeKey(self.get(index));
-  //    ancestor.free(index);
-  //};
-  //
+  /**
+   * Frees the index, including its entry, if any, in the pbp map.
+   */
+  self.free = function (index) {
+      index = IndexT.coerce(index);
+      
+      myPBPMap.set(self.get(index), undefined); // XXX this should be delete, but that isn't a cajita-table operation
+      ancestor.free(index);
+  };
+  
 
   // JS difference; returns undefined rather than -1 from failure
   self.indexFor = function (obj) {
