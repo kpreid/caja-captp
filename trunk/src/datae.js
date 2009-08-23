@@ -10,6 +10,15 @@ function mapF(func, array) {
   return cajita.freeze(out);
 }
 
+function makeRecogStackReport(stack) {
+  var report = [];
+  for (var i = stack.length - 1; i >= 0; i--) {
+    report.push("\n  ...in portrayal of "); report.push(stack[i]);
+  }
+  report.push("\n...which is the root.");
+  return cajita.freeze(report);
+}
+
 // This performs the same algorithm as deASTKit from E-on-Java, with only difference in the output.
 var deJSONTreeKit = (function () {
   function jsonAtomType(x) {
@@ -252,6 +261,14 @@ var deSubgraphKit = (function () {
             var nstack = stack.concat([obj]); // for debug tracing
             obj = Ref.resolution(obj);
             
+            if (false) {
+              // Debugging tool for infinite recursions in uncalling
+              if (stack.length > 10) {
+                console.error.apply(console, ["deSubgraphKit: breaking recursion with ", obj].concat(makeRecogStackReport(stack)));
+                throw new Error("DEBUG breaking recursion");
+              }
+            }
+            
             // There are several possible results from serializing an object, indicated below:
             
             var unenvLookup = unenv.get(obj);
@@ -284,6 +301,9 @@ var deSubgraphKit = (function () {
                     throw new Error("An uncaller returned undefined (not null).");
                   }
                   if (optPortrayal !== null) {
+                    if (false) {
+                      console.log("Uncalled ", obj, " using ", uncallers[i], " into ", optPortrayal);
+                    }
                     var recipBuilt = subRecog(optPortrayal[0], nstack);
                     var argsObjs = optPortrayal[2];
                     var argsBuilt = [];
@@ -297,12 +317,7 @@ var deSubgraphKit = (function () {
 
                 // *** The object is not serializable.
                 if (!node) {
-                  var report = ["deSubgraphKit: can't uneval ", obj];
-                  for (var i = stack.length - 1; i >= 0; i--) {
-                    report.push("\n  ...in portrayal of "); report.push(stack[i]);
-                  }
-                  report.push("\n...which is the root.");
-                  console.error.apply(console, report);
+                  console.error.apply(console, ["deSubgraphKit: can't uneval ", obj].concat(makeRecogStackReport(stack)));
                   throw new Error("deSubgraphKit: can't uneval object"); // don't throw secrets
                 }
               }
