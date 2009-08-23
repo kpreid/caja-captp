@@ -49,7 +49,7 @@ The following code is boilerplate to load a Cajita module with collecting the re
   ? def deSubgraphKit := exports["deSubgraphKit"]; null
   ? def makeCycleBreaker := exports["CycleBreaker"]; null
   ? def makeSwiss := exports["Swiss"]; null
-  ? def makeVine := exports["Vine"]; null
+  x ? def makeVine := exports["Vine"]; null
 
   ? def makeCapTPConnection := exports["CapTPConnection"]; null
   ? def makeSwissTable := exports["SwissTable"]; null
