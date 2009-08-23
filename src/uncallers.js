@@ -52,7 +52,9 @@ var builtinsUncaller = cajita.freeze({
     }
     
     if (Ref.isBroken(specimen)) {
-      return cajita.freeze([Ref, "broken", [Ref.optProblem(specimen)]]);
+      var problem = Ref.optProblem(specimen);
+      // XXX temporary kludge for Cajita tamed errors, which will go away eventually
+      return cajita.freeze([Ref, "broken", [new Error(problem.message)]]);
     }
     
     if (specimen === cajita.USELESS) {
