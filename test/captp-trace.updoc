@@ -64,8 +64,11 @@ Utility for producing traces of CapTP communication.
   >       [b.buildAtom("bar"),
   >        b.buildCall(b.buildImport("CapTP_1_descs"),
   >                    "Incoming",
-  >                    [b.buildAtom(2)] )]))})))
-  # stdout: DeliverOnly(0, 'foo', ['bar', IncomingDesc(2)])
+  >                    [b.buildAtom(2)] ),
+  >        b.buildCall(b.buildImport("CapTP_1_descs"),
+  >                    "NewFar",
+  >                    [b.buildAtom(3), b.buildImport("someSwissNum")] )]))})))
+  # stdout: DeliverOnly(0, 'foo', ['bar', IncomingDesc(2), NewFarDesc(3, someSwissNum)])
   #         
   
   # value: <JS undefined>
