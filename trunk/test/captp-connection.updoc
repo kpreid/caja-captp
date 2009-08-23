@@ -10,9 +10,6 @@ NOTE: The lines beginning with "x " are the remainder of the original E-on-CL ca
   ? pragma.syntax("0.9")
   ? pragma.enable("accumulator")
   
-x  ? def makeFlexMap := <elib:tables.makeFlexMap>; null
-x  ? def makeVine := <import:net.captp.tables.makeVine>; null
-
 In this file, we test the implementation of the CapTP operations and associated state.
 
 -------------------------------------------------------------------------------
@@ -50,8 +47,9 @@ The following code is boilerplate to load a Cajita module with collecting the re
 
   ? def jsRef := exports["Ref"]; null
   ? def deSubgraphKit := exports["deSubgraphKit"]; null
-  ? def CycleBreaker := exports["CycleBreaker"]; null
+  ? def makeCycleBreaker := exports["CycleBreaker"]; null
   ? def makeSwiss := exports["Swiss"]; null
+  ? def makeVine := exports["Vine"]; null
 
   ? def makeCapTPConnection := exports["CapTPConnection"]; null
   ? def makeSwissTable := exports["SwissTable"]; null
@@ -107,7 +105,7 @@ Data-E setup:
   >   envF["CapTP_1_descs"] := descs
   >   envF["CapTP_1_locatorUnum"] := locatorUnumRemote
   >   envF["CapTP_JS1_Swiss"] := makeSwiss
-  >   deSubgraphKit.makeRecognizer(js.undefined(), CycleBreaker.byInverting(envF))
+  >   deSubgraphKit.makeRecognizer(js.undefined(), makeCycleBreaker.byInverting(envF))
   > }; null
 
 buildIn takes an object in our test environment, containing objects made by 'descs' above, and transforms them as a CapTP wire protocol unserializer would.
@@ -350,43 +348,43 @@ wireDelta of 1 should delete the export.
 
 A reference is collected once the sum of wireDeltas in all received GCExport messages exceeds the number of times it is exported. Here's a multiple export:
 
-x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "exportTest2a", [exported])
-x   # value: <JS undefined>
-x 
-x   ? expect()
-x   # stdout: DeliverOnly(0, 'exportTest2a', [NewFarDesc(1, cajita.construct(CapTP_JS1_Swiss, ['9\u00ad\u001b<or\u000e\u0002\"\u00c0\u00a9\u00a1Cn\u00f4\u00f5k\u0005\u00e0h']))])
-x   #         
-x 
-x (The NewFarDesc's index is the same because 1 is at the head of the exports table's free list, not because of any deliberate relationship.)
-x 
-x   ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "exportTest2b", [exported])
-x   > jsRef.sendOnly(outgoingConnection.nonceLocator(), "exportTest2c", [exported])
-x   # value: <JS undefined>
-x 
-x   ? expect(); expect()
-x   # stdout: DeliverOnly(0, 'exportTest2b', [ImportDesc(1)])
-x   #         DeliverOnly(0, 'exportTest2c', [ImportDesc(1)])
-x   #         
-x 
-x wireDelta of 1 should have no effect (export count now 2).
-x 
-x   ? receiver.GCExport(1, 1)
-x   # value: <JS undefined>
-x 
-x   ? receiver.DeliverOnly(1, "call", buildIn([USELESS, "still here #2"]))
-x   # value: <JS undefined>
-x 
-x   # stdout: still here #2
-x   #         
-x   
-x Additional wireDelta of 2 should balance the three previous references.
-x 
-x   ? receiver.GCExport(1, 2)
-x   # value: <JS undefined>
-x 
-x   ? receiver.DeliverOnly(1, "call", buildIn([USELESS, "gone #2"]))
-x   # problem: Error: CommTable(exportsTable): 1 not alloced
-x 
+  ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "exportTest2a", [exported])
+  # value: <JS undefined>
+
+  ? expect()
+  # stdout: DeliverOnly(0, 'exportTest2a', [NewFarDesc(1, cajita.construct(CapTP_JS1_Swiss, ['9\u00ad\u001b<or\u000e\u0002\"\u00c0\u00a9\u00a1Cn\u00f4\u00f5k\u0005\u00e0h']))])
+  #         
+
+(The NewFarDesc's index is the same because 1 is at the head of the exports table's free list, not because of any deliberate relationship.)
+
+  ? jsRef.sendOnly(outgoingConnection.nonceLocator(), "exportTest2b", [exported])
+  > jsRef.sendOnly(outgoingConnection.nonceLocator(), "exportTest2c", [exported])
+  # value: <JS undefined>
+
+  ? expect(); expect()
+  # stdout: DeliverOnly(0, 'exportTest2b', [ImportDesc(1)])
+  #         DeliverOnly(0, 'exportTest2c', [ImportDesc(1)])
+  #         
+
+wireDelta of 1 should have no effect (export count now 2).
+
+  ? receiver.GCExport(1, 1)
+  # value: <JS undefined>
+
+  ? receiver.DeliverOnly(1, "call", buildIn([USELESS, "still here #2"]))
+  # value: <JS undefined>
+
+  # stdout: still here #2
+  #         
+  
+Additional wireDelta of 2 should balance the three previous references.
+
+  ? receiver.GCExport(1, 2)
+  # value: <JS undefined>
+
+  ? receiver.DeliverOnly(1, "call", buildIn([USELESS, "gone #2"]))
+  # problem: Error: CommTable(exportsTable): 1 not alloced
+
 
 --- Incoming GCAnswerOp ---
 
@@ -421,30 +419,30 @@ but not after GCAnswerOp:
   >                      buildIn([descs.Import(1)]))
   # problem: Error: CommTable(answersTable): 1 not alloced
 
-x --- Incoming ShutdownOp ---
-x 
-x XXX do this (shut down connection iff no more messages than the specified count have been sent by the recipient). Must not be visible to code. Note that 
-x 
-x (IRC log from July 28, 2007)
-x <markmiller> The funny case is messages to be sent to zero when a shutdown might happen
-x <markmiller> These need to be buffered, so that if a shutdown does happen, that can be resent transparently on a newly formed connection.
-x <kpreid> ow
-x <markmiller> This is much of why it was never fully implemented.
-x <kpreid> whereas in the current impls, it's essentially a connection-specific always-live-ref, yes?
-x <markmiller> GCing connections seems to be hard
-x <markmiller> yes
-x 
-x --- Incoming TerminatedOp ---
-x 
-x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
-x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
-x 
-x There are several cases to check the behavior of:
-x 
-x Imported far ref:
-x   
+--- Incoming ShutdownOp ---
+
+XXX do this (shut down connection iff no more messages than the specified count have been sent by the recipient). Must not be visible to code. Note that 
+
+(IRC log from July 28, 2007)
+<markmiller> The funny case is messages to be sent to zero when a shutdown might happen
+<markmiller> These need to be buffered, so that if a shutdown does happen, that can be resent transparently on a newly formed connection.
+<kpreid> ow
+<markmiller> This is much of why it was never fully implemented.
+<kpreid> whereas in the current impls, it's essentially a connection-specific always-live-ref, yes?
+<markmiller> GCing connections seems to be hard
+<markmiller> yes
+
+--- Incoming TerminatedOp ---
+
+  ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+  # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+
+There are several cases to check the behavior of:
+
+Imported far ref:
+  
 x   ? def outgoingFar := jsRef.send(outgoingConnection.nonceLocator(), "getTerminatedTestRef1", [])
-x   # value: <Promise>
+x   # value: [Promise]
 x   
 x   ? expect()
 x   # stdout: Deliver(-1, NewFarDesc(1, cajita.construct(CapTP_JS1_Swiss, ['9\u00ad\u001b<or\u000e\u0002\"\u00c0\u00a9\u00a1Cn\u00f4\u00f5k\u0005\u00e0h'])), 0, 'getTerminatedTestRef1', [])
@@ -528,7 +526,7 @@ x
 x XXX test these things' behavior after termination:
 x   proxy finalizer
 x   locally referenced redirector (gets exported then sent home)
-x 
+
 --- Incoming WormholeOp ---
 
 XXX we don't have VatID processing yet
@@ -547,26 +545,27 @@ XXX we don't have VatID processing yet
   # stdout: DeliverOnly(1, 'call', [(cajita)['USELESS'], ImportDesc(0)])
   #         
 
-x --- Incoming NewRemotePromiseDesc, and delayed redirection ---
-x 
-x   ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
-x   # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
-x 
-x First we set up an incoming reference to an object to catch the remote promise.
-x 
-x   ? clearFinalizers()
-x   > def remotePromise
-x   > def promiseReceiver(p) {
-x   >   println(`got $p`)
-x   >   bind remotePromise := p
-x   > }
-x   > def swiss := swissTable.getNewSwiss(promiseReceiver); null
-x   > receiver.Deliver(-3, buildIn(descs.NewFar(2, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003\u00a0"))), 0, "lookupSwiss", buildIn([swiss, jsnull]))
-x   > receiver.GCAnswer(-3)
-x   ? expect()
-x   # stdout: DeliverOnly(2, 'call', [(cajita)['USELESS'], NewFarDesc(1, cajita.construct(CapTP_JS1_Swiss, ['9\u00ad\u001b<or\u000e\u0002\"\u00c0\u00a9\u00a1Cn\u00f4\u00f5k\u0005\u00e0h']))])
-x   #         
-x 
+--- Incoming NewRemotePromiseDesc, and delayed redirection ---
+
+  ? def [swissTable, receiver, outgoingConnection, peerConnection] := makeTestConnection()
+  # value: [[SwissTable], [CapTP receiver], [CapTP outgoing to tRemoteVatID], [CapTP peer to tRemoteVatID]]
+
+First we set up an incoming reference to an object to catch the remote promise.
+
+  ? clearFinalizers()
+  > var remotePromise := null
+  > def promiseReceiver := js.asFunction(def promiseReceiverE(p) {
+  >   println(`got $p`)
+  >   remotePromise := p
+  > })
+  > def swiss := swissTable.getNewSwiss(promiseReceiver)
+  > receiver.Deliver(-3, buildIn(descs.NewFar(2, makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003\u00a0"))), 0, "lookupSwiss", buildIn([swiss, jsnull]))
+  > receiver.GCAnswer(-3)
+  # value: <JS undefined>
+  ? expect()
+  # stdout: DeliverOnly(2, 'call', [(cajita)['USELESS'], NewFarDesc(1, cajita.construct(CapTP_JS1_Swiss, ['9\u00ad\u001b<or\u000e\u0002\"\u00c0\u00a9\u00a1Cn\u00f4\u00f5k\u0005\u00e0h']))])
+  #         
+
 x Then we deliver a message containing the promise.
 x 
 x   ? receiver.DeliverOnly(1, "call", buildIn([USELESS, descs.NewRemotePromise(3, -4, def remotePromiseRdrBase := makeSwiss("\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u00ff\u00c0\u00c6\u001d"))]))
