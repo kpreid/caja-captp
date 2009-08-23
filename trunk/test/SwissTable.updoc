@@ -36,7 +36,7 @@ The following code is boilerplate to load a Cajita module with collecting the re
   > def makeSwiss := exports["Swiss"]
   > null
 
-  ? def swissTable := makeSwissTable()
+  ? def swissTable := makeSwissTable(exports["entropy"])
   # value: [SwissTable]
 
 Bug: getNewSwiss and lookupSwiss would not accept promises

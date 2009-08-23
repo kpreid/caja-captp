@@ -27,6 +27,9 @@ The following code is boilerplate to load a Cajita module with collecting the re
 
 -------------------------------------------------------------------------------
 
+  ? interp.setPrintFunc(interp.getPrintFunc().withExit(cajita, "cajita"))
+
+
 This is a placeholder. We *should* have tests for the operation of each of these tables, but they haven't been written yet; so we just check that they instantiate successfully.
 
   ? exports["ExportsTable"]()
@@ -85,4 +88,4 @@ Caja-CapTP swiss number wrappers.
   # value: "517d7a4114aec6976ca0ed31fc918965fcf1f701"
   
   ? s11.CapTP__optUncall()
-  # value: [<JS func Swiss>, "call", [USELESS, "\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u00124"]]
+  # value: [cajita, "construct", [<JS func Swiss>, ["\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u00124"]]]

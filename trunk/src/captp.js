@@ -22,7 +22,7 @@ var VatID = cajita.freeze({T: T.stringT});
 var isSwiss = cajita.newTable(true);
 function Swiss(value) {
   cajita.enforceType(value, "string"); // XXX does not check details
-  var swiss = cajita.freeze({
+  var swiss = cajita.freeze(Ref.markPBC({
     // The function used to hash SwissBase->SwissNumber->SwissHash.
     hash: function () {
       return new Swiss(str_sha1(value));
@@ -39,9 +39,9 @@ function Swiss(value) {
     },
     
     CapTP__optUncall: function () {
-      return portrayCall(Swiss, [value]);
+      return portrayConstruct(Swiss, [value]);
     }
-  });
+  }));
   isSwiss.set(swiss, true);
   return swiss;
 }
@@ -206,8 +206,8 @@ var CommTableMixin = (function () {
           if (oldCapacity === myCapacity) {
               return;
           }
-          myFreeList.setSize(myCapacity);
-          myStuff.setSize(myCapacity);
+          myFreeList.length = myCapacity;
+          myStuff.length = myCapacity;
           for (var i = oldCapacity; i < myCapacity; i++) {
               //each entry points at the next
               myFreeList[i] = -(i + 1);
@@ -466,7 +466,7 @@ var CommTableMixin = (function () {
  *
  * @author Kevin Reid, after Mark S. Miller's Java code from E-on-Java
  */
-function SwissTable() {
+function SwissTable(entropySource) {
   // The code within this block is derived, by way of the E-on-CL CapTP 
   // implementation, from the E-on-Java CapTP implementation, and is therefore:
   // Copyright 2002 Combex, Inc. under the terms of the MIT X license
@@ -475,7 +475,7 @@ function SwissTable() {
   // Maps from NEAR Selfish objects to SwissNumbers.
   var mySelfishToSwiss = makeWeakKeyMap();
 
-  // Maps from SwissNumber to anything.
+  // Maps from SwissNumber's bits to anything.
   //
   // Note: can't handle undefined values.
   var mySwissToRef = makeWeakValueMap();
@@ -499,7 +499,7 @@ function SwissTable() {
           //Since Weak*Maps can't handle nulls, we handle it ourselves. <- caja-captp: This is an inherited comment.
           return undefined;
       }
-      var res = mySwissToRef.get(swissNum);
+      var res = mySwissToRef.get(swissNum.bits);
       if (res !== undefined) {
         return res;
       }
@@ -510,7 +510,7 @@ function SwissTable() {
           db(swissHash);
       }
       //try one more time
-      res = mySwissToRef.get(swissNum);
+      res = mySwissToRef.get(swissNum.bits);
       if (res !== undefined) {
         return res;
       }
@@ -571,8 +571,8 @@ function SwissTable() {
         }
         var result = mySelfishToSwiss.get(obj);
         if (undefined === result) {
-            result = entropy.nextSwiss();
-            mySwissToRef.set(result, obj);
+            result = entropySource.nextSwiss();
+            mySwissToRef.set(result.bits, obj);
             mySelfishToSwiss.set(obj, result);
         }
         return result;
@@ -595,8 +595,8 @@ function SwissTable() {
         if (Ref.isSelfish(ref)) {
             return swissTable.getIdentity(ref);
         }
-        var result = entropy.nextSwiss();
-        mySwissToRef.set(result, ref);
+        var result = entropySource.nextSwiss();
+        mySwissToRef.set(result.bits, ref);
         return result;
     },
 
@@ -623,7 +623,7 @@ function SwissTable() {
       }
       var result = swissBase.hash();
       var oldObj =
-        Ref.resolution(mySwissToRef.fetch(result, function () { return obj; }));
+        Ref.resolution(mySwissToRef.fetch(result.bits, function () { return obj; }));
       require(undefined === oldObj || identical(oldObj, obj),
               function () { return "SwissNumber already identifies a different object: " +
                             result; });
@@ -634,7 +634,7 @@ function SwissTable() {
                         oldSwiss + " vs " + result);
       }
       mySelfishToSwiss.set(obj, result);
-      mySwissToRef.set(result, obj);
+      mySwissToRef.set(result.bits, obj);
       return result;
     },
 
@@ -658,9 +658,9 @@ function SwissTable() {
             var swissHash = result.hash();
             throw new Error("May not re-register undefined for swissHash: " + swissHash);
         }
-        var oldRef = mySwissToRef.get(result);
+        var oldRef = mySwissToRef.get(result.bits);
         if (undefined === oldRef) {
-            mySwissToRef.set(result, ref);
+            mySwissToRef.set(result.bits, ref);
         } else if (identical(ref, oldRef)) {
             // Registering the same object with the same base is cool.
             // XXX should we use Ref.same(..) instead of == ?
@@ -676,12 +676,12 @@ function SwissTable() {
      * A convenience method typically used to obtain new SwissBases (archashes
      * of SwissNumbers).
      * <p/>
-     * Since a client of SwissTable can obtain such entropy from the SwissTable
+     * Since a client of SwissTable can obtain such entropySource from the SwissTable
      * anyway, by registering objects, there's no loss of security in providing
      * this convenience method.
      */
     nextSwiss: function () {
-      return entropy.nextSwiss();
+      return entropySource.nextSwiss();
     }
   });
   return swissTable;
@@ -697,18 +697,30 @@ function AnswersTable() {
   return cajita.freeze(self);
 }
 
+// XXX stub for the benefit of ExportsTable; review where this should live and whether Ref or this is the home of it
+var PassByProxyT = cajita.freeze({
+  toString: function () { return "PassByProxyT"; },
+  coerce: function (sp, ej) { 
+    if (!Ref.isPBC(sp)) { // PassByProxy is the antonym of PassByConstruction
+      return sp;
+    } else {
+      T.fail(sp, g, ej);
+    }
+  }
+});
+
 function ExportsTable() {
   var self = {};
   self = new CommTableMixin(self);
-  var ancestor = cajita.snapshot(self); // Cajita bug: "super" is reserved.
+  var ancestor = cajita.snapshot(self);
   
-  //// Gets the index for a near export.
-  //var myPBPMap = cajita.newTable();
-  //    
+  // Gets the index for a near export.
+  var myPBPMap = cajita.newTable(false);
+      
   //self.smash = function (problem) {
   //    for (var i = 1; i < ancestor._getCapacity(); i++) {
-  //        if (!exportsTable.isFree(i)) {
-  //            Ref.sendOnly(exportsTable[i], "__reactToLostClient", [problem]);
+  //        if (!self.isFree(i)) {
+  //            Ref.sendOnly(self[i], "__reactToLostClient", [problem]);
   //        }
   //    }
   //    ancestor.smash(problem);
@@ -721,36 +733,38 @@ function ExportsTable() {
   //self.free = function (index) {
   //    index = IndexT.coerce(index);
   //    
-  //    myPBPMap.removeKey(exportsTable[index]);
+  //    myPBPMap.removeKey(self.get(index));
   //    ancestor.free(index);
   //};
   //
-  ///**
-  // *
-  // */
-  //self.indexFor = function (obj) {
-  //    return myPBPMap.fetch(obj, function () { return -1; });
-  //};
-  //
-  ///**
-  // * Allocates and returns the index of a newly exported local PassByProxy
-  // * object.
-  // * <p/>
-  // * The wireCount is initialized to one
-  // *
-  // * @param pbp The local PassByProxy object to be exported
-  // * @return The index of the FarRef to be created-imported on the other
-  // *         end.
-  // */
-  //self.newFarPos = function (pbp) {
-  //    // XXX kpreid wonders whether this should be an override of "bind"/1 instead
-  //    
-  //    // XXX kpreid wonders whether allowing coercion is correct here, and also about the consequences of failing at this point
-  //    pbp = PassByProxy.coerce(pbp); // XXX JS translation: PassByProxy doesn't exist
-  //    var index = exportsTable.bind(pbp);
-  //    myPBPMap.set(pbp, index, true);
-  //    return index;
-  //};
+
+  // JS difference; returns undefined rather than -1 from failure
+  self.indexFor = function (obj) {
+      return myPBPMap.get(obj);
+  };
+  
+  /**
+   * Allocates and returns the index of a newly exported local PassByProxy
+   * object.
+   * <p/>
+   * The wireCount is initialized to one
+   *
+   * @param pbp The local PassByProxy object to be exported
+   * @return The index of the FarRef to be created-imported on the other
+   *         end.
+   */
+  self.newFarPos = function (pbp) {
+      // XXX kpreid wonders whether this should be an override of "bind"/1 instead
+      
+      // XXX kpreid wonders whether allowing coercion is correct here, and also about the consequences of failing at this point
+      pbp = PassByProxyT.coerce(pbp);
+      var index = self.bind(pbp);
+      if (myPBPMap.get(pbp)) {
+        throw new Error("ExportsTable newFarPos: Object already registered");
+      }
+      myPBPMap.set(pbp, index);
+      return index;
+  };
 
   self.commTableType = "exportsTable";
 
@@ -875,6 +889,8 @@ var traceMessages = (function () {
 
 // exports
 cajita.freeze({
+  entropy: entropy, 
+  
   AnswerPosT: AnswerPosT,
   ExportPosT: ExportPosT,
   ImportPosT: ImportPosT,
