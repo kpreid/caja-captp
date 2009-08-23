@@ -805,7 +805,7 @@ var traceMessages = (function () {
       var twiddleBuilder = cajita.copy(ancestor);
       twiddleBuilder.buildCall = function (rec, verb, args) {
         if (rec === "CapTP_1_descs") {
-          return verb + "Desc(" + args + ")";
+          return verb + "Desc(" + args.join(", ") + ")";
         } else if (rec === "DataE_JS1_builtinsMaker" && verb === "frozenArray") {
           // deJavaScriptKit has a similar hack, but it used cajita.freeze(); we want more brevity than that
           return "[" + args.join(", ") + "]";
