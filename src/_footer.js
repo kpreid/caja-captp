@@ -1,7 +1,8 @@
 // --- Beginning of concatenated-module gimmick footer ---
     realtriple_concatmodule___.loadModule({
       "instantiate": function (triplePassedIn, IMPORTS___) {
-        var debug = window.console && window.console.groupCollapsed && window.console.group && window.console.groupEnd && window.console.log;
+        var global = this;
+        var debug = global.console && global.console.groupCollapsed && global.console.group && global.console.groupEnd && global.console.log;
         if (debug) console.groupCollapsed("Loading Caja-CapTP");
         // Each module sees the outside imports as well as preceding modules' exports;
         // but the caller sees only exports.
