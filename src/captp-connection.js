@@ -100,11 +100,14 @@ function CapTPConnection(outgoingReceiver, swissTable, locatorUnum, whenGarbage,
   
   var pbcUncaller = cajita.freeze({
     optUncall: function (r) {
-      if (Ref.isPBC(r) && "CapTP__optUncall" in r) {
-        return r.CapTP__optUncall(); // XXX caja-captp review: optUncall protocol?
-      } else if (Ref.isBroken(r)) {
-        // XXX this discards the identities of unconnected refs -- OK?
-        return [Ref, "broken", [Ref.optProblem(r)]];
+      if (Ref.isPBC(r)) {
+        if ("CapTP__optUncall" in r) {
+          return r.CapTP__optUncall(); // XXX caja-captp review: optUncall protocol?
+        } else if (cajita.isRecord(r)) {
+          return recordUncaller.optUncall(r);
+        } else {
+          return null;
+        }
       }
       return null;
     }
@@ -134,7 +137,7 @@ function CapTPConnection(outgoingReceiver, swissTable, locatorUnum, whenGarbage,
       if (!Ref.isPassByCopy(r)) {
         //traceln(`exporting $r`)
         var index = exports.indexFor(r);
-        if (index != -1) {
+        if (index !== undefined) {
           exports.incr(index);
           return [descMakerStandin, "Import", [index]];
         } else {
@@ -188,7 +191,6 @@ function CapTPConnection(outgoingReceiver, swissTable, locatorUnum, whenGarbage,
      genericPromiseUncaller,
      builtinsUncaller,
      pbcUncaller,
-     recordUncaller,
      proxyUncaller],
     unenv);
   
