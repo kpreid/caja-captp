@@ -12,7 +12,6 @@
 
 {
   ___.loadModule({'instantiate': function (___, IMPORTS___) {
-
     var scheduling = (function () {
       function tameSetTimeout(func, delay) {
         setTimeout(function () {
@@ -26,7 +25,9 @@
     })();
     
     var tameConsole;
-    if (window.console) {
+    var ok = false;
+    try { ok = console !== undefined; } catch (e) {}
+    if (ok) {
       function tameConsoleMethod(m) {
         // Wrapper to both make this a simple function and to hang a prefix on the log messages.
         return ___.frozenFunc(function () {
