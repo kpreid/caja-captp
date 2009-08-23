@@ -380,6 +380,39 @@ Bugfix test: promise ref not propagating opt-problem correctly
   ? jsRef.optProblem(p)
   # value: Error: boink
 
+-------------------------------------------------------------------------------
+PassByConstruction flag
+
+  ? jsRef.isPBC(js.null())
+  # value: true
+
+  ? jsRef.isPBC(js.undefined())
+  # value: true
+
+  ? jsRef.isPBC(1)
+  # value: true
+
+  ? jsRef.isPBC([])
+  # value: true
+
+  ? jsRef.isPBC(js.asFunction(fn {}))
+  # value: false
+
+  ? jsRef.isPBC(js.newObject())
+  # value: false
+
+  ? jsRef.isPBC(cajita.freeze(js.newObject()))
+  # value: false
+
+  ? def obj := js.newObject()
+  > jsRef.markPBC(obj)
+  > jsRef.isPBC(obj)    # XXX review: Should require freezing first?
+  # value: true
+
+  ? def obj := cajita.freeze(js.newObject())
+  > jsRef.markPBC(obj)
+  > jsRef.isPBC(obj)
+  # problem: Error: Must not be frozen to mark PBC
 
 -------------------------------------------------------------------------------
 Broken references

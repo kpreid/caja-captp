@@ -115,6 +115,9 @@ function coerceToError(x) {
   }
 }
 
+// Stores a true value for every value which is pass-by-construction and also not an array or primitive.
+var pbcTable = cajita.newTable(true);
+
 var Ref = cajita.freeze({
   toString: function () {
     return "[Caja-CapTP Ref]";
@@ -363,7 +366,15 @@ var Ref = cajita.freeze({
   isPBC: function (ref) {
     // XXX isSettled,isSelfish,isPBC need revision once we have passbycopy objects (if we do at all).
     var t = typeof(ref);
-    return cajita.isArray(ref) || (t==="number" || t==="string" || t==="undefined" || t==="boolean" || ref===null || ref===undefined);
+    return cajita.isArray(ref) || (t==="number" || t==="string" || t==="undefined" || t==="boolean" || ref===null || ref===undefined) || !!pbcTable.get(ref);
+  },
+  
+  /** Mark a not-yet-frozen object as pass-by-construction, and return it. 
+     This method is new to Caja-CapTP and corresponds to using the pbc auditor in E. */
+  markPBC: function (ref) {
+    cajita.enforce(!cajita.isFrozen(ref), "Must not be frozen to mark PBC");
+    pbcTable.set(ref, true);
+    return ref;
   },
 
   /** http://wiki.erights.org/wiki/PassByCopy
