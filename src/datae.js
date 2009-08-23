@@ -337,9 +337,38 @@ var deJavaScriptKit = (function () {
         },
         
         buildAtom: function (value) {
+          //return JSON.stringify(value); // Not built into Cajita yet
           switch (typeof(value)) {
-            case "string": return "\"" + value.replace(new RegExp("[\\\"]", "g"), "\\$&") + "\"";
-            default: return "" + value;
+            case "string":
+              var buffer = ["'"];
+              for (var i = 0; i < value.length; i++) {
+                 var j = i;
+                 var c;
+                 while ("\u0020" <= (c = value[j]) && c < "\u007f" && c != "\\" && c != '"' && c != "'") j++;
+                 buffer.push(value.substring(i, j));
+                 if (j < value.length) {
+                   var esc;
+                   switch (value[j]) {
+                     case "\b": esc = "\\b"; break;
+                     case "\t": esc = "\\t"; break;
+                     case "\n": esc = "\\n"; break;
+                     case "\f": esc = "\\f"; break;
+                     case "\r": esc = "\\r"; break;
+                     case "\'": esc = "\\'"; break;
+                     case "\"": esc = "\\\""; break;
+                     case "\\": esc = "\\\\"; break;
+                     default:   
+                       esc = "0000" + c.charCodeAt(0).toString(16);
+                       esc = "\\u" + esc.substring(esc.length - 4);
+                   }
+                   buffer.push(esc);
+                 }
+                 i = j;
+              }
+              buffer.push("'");
+              return buffer.join("");
+            default:
+              return "" + value;
           }
         },
         
