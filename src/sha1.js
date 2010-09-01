@@ -1,4 +1,4 @@
-"use strict,cajita";
+"use cajita";
 // This file has been modified in the following ways:
 //  * Added exports table and Cajita header.
 //  * Corrected uses of "Array()" instead of "new Array()".
